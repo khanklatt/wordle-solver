@@ -14,9 +14,9 @@ class TestDataLoading(unittest.TestCase):
     
     def test_load_positional_frequency_files(self):
         """
-        Test Case 1.1.1: System loads positional frequency files from /tmp/pos1.txt through /tmp/pos5.txt
+        Test Case 1.1.1: System loads positional frequency files from ./lib/pos1.txt through ./lib/pos5.txt
         
-        Given: Frequency files exist at /tmp/pos1.txt through /tmp/pos5.txt
+        Given: Frequency files exist at ./lib/pos1.txt through ./lib/pos5.txt
         When: WordleSolver is initialized
         Then: All five positional frequency files are loaded successfully
         """
@@ -76,9 +76,9 @@ class TestDataLoading(unittest.TestCase):
     
     def test_load_valid_wordle_words(self):
         """
-        Test Case 1.3.1: System loads valid Wordle words from /tmp/wordle-words.txt
+        Test Case 1.3.1: System loads valid Wordle words from ./lib/wordle-words.txt
         
-        Requirement 1.3: Load valid Wordle words from /tmp/wordle-words.txt
+        Requirement 1.3: Load valid Wordle words from ./lib/wordle-words.txt
         
         Given: wordle-words.txt file exists with one word per line
         When: WordleSolver is initialized with words_file parameter

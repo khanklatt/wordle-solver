@@ -19,21 +19,21 @@ Wordle Solver guides you through solving Wordle puzzles by:
 
 ### 1. Required Input Files
 
-The solver requires the following files to be present in `/tmp/`:
+The solver requires the following files to be present in the `./lib/` directory:
 
 #### Positional Letter Frequency Files
-- `/tmp/pos1.txt` - Letters for position 1, ordered by frequency (descending)
-- `/tmp/pos2.txt` - Letters for position 2, ordered by frequency (descending)
-- `/tmp/pos3.txt` - Letters for position 3, ordered by frequency (descending)
-- `/tmp/pos4.txt` - Letters for position 4, ordered by frequency (descending)
-- `/tmp/pos5.txt` - Letters for position 5, ordered by frequency (descending)
+- `./lib/pos1.txt` - Letters for position 1, ordered by frequency (descending)
+- `./lib/pos2.txt` - Letters for position 2, ordered by frequency (descending)
+- `./lib/pos3.txt` - Letters for position 3, ordered by frequency (descending)
+- `./lib/pos4.txt` - Letters for position 4, ordered by frequency (descending)
+- `./lib/pos5.txt` - Letters for position 5, ordered by frequency (descending)
 
 **Format**: Each line contains a frequency count followed by a space and the letter:
 ```
 frequency letter
 ```
 
-Example `/tmp/pos1.txt`:
+Example `./lib/pos1.txt`:
 ```
 1132 s
 635 c
@@ -47,9 +47,9 @@ Example `/tmp/pos1.txt`:
 The files are sorted in descending order by frequency (highest frequency first). The solver extracts the letter from each line, ignoring the frequency count.
 
 #### Valid Word List
-- `/tmp/wordle-words.txt` - List of valid 5-letter Wordle words (one word per line, lowercase)
+- `./lib/wordle-words.txt` - List of valid 5-letter Wordle words (one word per line, lowercase)
 
-Example `/tmp/wordle-words.txt`:
+Example `./lib/wordle-words.txt`:
 ```
 saint
 slant
@@ -194,7 +194,7 @@ Enter green letters feedback (use dots for unknown positions, e.g., 'S..NT'): PL
 - **Grey letters**: Space-separated letters, any length
 
 ### File Not Found Errors
-- Ensure all required files exist in `/tmp/`
+- Ensure all required files exist in `./lib/` directory
 - Check file permissions (must be readable)
 - Verify file format (one item per line)
 

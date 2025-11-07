@@ -9,8 +9,8 @@ Example usage:
     >>> solver.solve()
 
 The solver requires:
-    - Positional frequency files: /tmp/pos1.txt through /tmp/pos5.txt
-    - Valid word list: /tmp/wordle-words.txt
+    - Positional frequency files: ./lib/pos1.txt through ./lib/pos5.txt
+    - Valid word list: ./lib/wordle-words.txt
 
 See README.md for detailed setup and usage instructions.
 """
@@ -31,20 +31,29 @@ class WordleSolver:
     MAX_LETTERS_IN_ALPHABET = 26
     VOWELS = set('aeiou')
     
-    def __init__(self, frequency_dir: str = '/tmp', words_file: str = '/tmp/wordle-words.txt'):
+    def __init__(self, frequency_dir: Optional[str] = None, words_file: Optional[str] = None):
         """
         Initialize Wordle Solver
         
-        Requirement 1.1: Load positional letter frequency files from /tmp/pos1.txt through /tmp/pos5.txt
-        Requirement 1.3: Load valid Wordle words from /tmp/wordle-words.txt
+        Requirement 1.1: Load positional letter frequency files from ./lib/pos1.txt through ./lib/pos5.txt
+        Requirement 1.3: Load valid Wordle words from ./lib/wordle-words.txt
         
         Args:
-            frequency_dir: Directory containing positional frequency files (default: /tmp)
-            words_file: Path to file containing valid Wordle words (default: /tmp/wordle-words.txt)
+            frequency_dir: Directory containing positional frequency files (default: ./lib relative to project root)
+            words_file: Path to file containing valid Wordle words (default: ./lib/wordle-words.txt relative to project root)
         
         Raises:
             IOError: If files cannot be read (with clear error message)
         """
+        # Get project root directory (directory containing this file)
+        # Since wordle_solver.py is in the project root, __file__'s directory is the project root
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        
+        # Set default paths relative to project root
+        if frequency_dir is None:
+            frequency_dir = os.path.join(project_root, 'lib')
+        if words_file is None:
+            words_file = os.path.join(project_root, 'lib', 'wordle-words.txt')
         self.positional_frequencies: Dict[int, str] = {}
         self.valid_words: Set[str] = set()
         
