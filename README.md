@@ -1,72 +1,239 @@
-# Sancak - /ˈsɑn.dʒak/ - AI-Assisted Coding Methodology & Framework
+# Wordle Solver
 
-This is a structured product development methodology that leverages AI/human interaction for software development. It enforces test-driven development, hierarchical requirements, and role-based collaboration between AI agents and humans. The AI will be guided to operate within the framework using the markdown files in `/docs` so it's a good place to go to understand it yourself. 
+An interactive command-line tool that helps you solve Wordle puzzles by analyzing letter frequencies and filtering candidate words based on your guesses and feedback.
 
-## Design Philosophy and Features
-This framework embodies specific opinions about effective software development that we believe apply equally to human and AI collaboration:
-- **Requirements First, Always**  
-  Code without clear, testable requirements is speculation. We enforce requirement definition before any implementation begins, with each requirement traceable through tests to code.
-- **Test-Driven Development is Non-Negotiable**  
-  Tests aren't documentation — they're executable specifications. Writing tests first forces clarity about what "done" means and prevents scope creep during implementation.
-- **Breadth Before Depth**  
-  Like story mapping, we prioritize end-to-end functionality over feature completeness. Build the MVP spine first, then add sophistication. This keeps the system functional at every milestone.
-- **Role Clarity Prevents Chaos**  
-  Different cognitive modes require different contexts. A technical product manager thinks differently than a developer. We enforce role boundaries to maintain focus and accountability.
-- **Incremental Progress with Human Oversight**  
-  AI can implement, but humans must understand and approve. One subtask at a time, with human checkpoints, prevents runaway automation and maintains code ownership.
-- **Documentation is Code**  
-  If it's not written down with the same rigor as code, it doesn't exist. Requirements, architectural decisions, and task status live in version control alongside implementation.
-- **Scientific Problem Solving**  
-  When things break, form hypotheses and test them systematically. This prevents the "try random things until it works" antipattern common in AI-assisted development.
-- **Tool Agnostic by Design**  
-  Good methodology shouldn't depend on specific tools. Markdown and git are universal; everything else is replaceable.
+## Overview
 
----
+Wordle Solver guides you through solving Wordle puzzles by:
+- Suggesting optimal first guesses based on positional letter frequency analysis
+- Filtering candidate words based on green (correct position), yellow (wrong position), and grey (not in word) feedback
+- Expanding candidate sets using frequency data when initial filtering yields no results
+- Providing clear, human-readable feedback and suggestions
 
-If these principles resonate with your approach to software development, I'm hopeful this methodology and framework will feel natural and enable productive sotware product development.
+## Prerequisites
+
+- Python 3.6 or higher
+- Required input files (see Setup section)
+
+## Setup
+
+### 1. Required Input Files
+
+The solver requires the following files to be present in `/tmp/`:
+
+#### Positional Letter Frequency Files
+- `/tmp/pos1.txt` - Letters for position 1, ordered by frequency (descending)
+- `/tmp/pos2.txt` - Letters for position 2, ordered by frequency (descending)
+- `/tmp/pos3.txt` - Letters for position 3, ordered by frequency (descending)
+- `/tmp/pos4.txt` - Letters for position 4, ordered by frequency (descending)
+- `/tmp/pos5.txt` - Letters for position 5, ordered by frequency (descending)
+
+**Format**: Each line contains a frequency count followed by a space and the letter:
+```
+frequency letter
+```
+
+Example `/tmp/pos1.txt`:
+```
+1132 s
+635 c
+635 a
+629 b
+584 t
+506 p
+...
+```
+
+The files are sorted in descending order by frequency (highest frequency first). The solver extracts the letter from each line, ignoring the frequency count.
+
+#### Valid Word List
+- `/tmp/wordle-words.txt` - List of valid 5-letter Wordle words (one word per line, lowercase)
+
+Example `/tmp/wordle-words.txt`:
+```
+saint
+slant
+plant
+chant
+grant
+...
+```
+
+### 2. Installation
+
+No installation required! Just ensure you have Python 3.6+ and the required input files.
 
 ## Usage
 
-### Requirements generation
-1. Clone this repo as the baseline of your project, or unzip into an existing project. 
-1. Then, include *each of the markdown files individually* from `/docs` in your AI coding chat context
-1. Initiate requirements gathering with a phrase like:
-* "Help me write the requirements for a product that..." *
-*Merely including the docs folder itself does not seem to have the same effect as individually outlining the files separately*
-1. Answer any questions that the AI might pose. I tend to provide some project assumptions about tech stack and other details, so if you haven't done so yet, you can articulate your expectations or tell the AI you'd like it to choose what seems most suitable.
-1. When ready, it can be sufficient to merely say, "Let's proceed to the next step."
+### Running the Solver
 
-### TDD and Development cycle
-1. At this juncture, the AI should write some unit tests. If not, you might guide it that way.
-1. Review the unit tests, and when satisfied you can tell the AI to proceed to the next step. If you want to be more explicit, you can ask it to produce a set of TODOs to create the project directory structure, create config files, and establish your preferred coding conventions for the selected platform choices made so far. 
-1. It's up to you whether you want to go deeper into more implementation, or ask the AI to make the tests pass first. Small iterative cycles are recommended so you don't get too far ahead of your skiis. Recommended prompt: "Lets make sure our tests are passing and we're happy with our test coverage."
-1. The AI should now iterate on making the tests pass and depending on frameworks and toolsets, it might detect coverage gaps and either implement or offer to implement more tests to expand coverage. It is recommended to keep the AI tasked on writing tests before writing the implementation, so if it offers to skip ahead, keep it in line.
-1. Rinse and repeat until all TODOs in your requirements are complete.
+Run the solver from the command line:
 
-### Recommended Prompts
-At various stages of completeness, you can try some of these prompts:
-- Lets make sure our tests are passing and we're happy with our test coverage.
-- Please review the code as a senior developer might, and add some TODOs for improving the readability and maintainability of the code and the tests. Then, fix those TODOs.
-- Since we made code changes, let's make sure our tests are still passing.
-- I noticed during refactoring, you removed requirement references. Please ensure that all implementations are traceable back to their requirements.
-- Let's go through the steps of showing our progress to stakeholders, how should we proceed to show working code?
+```bash
+python3 wordle_solver.py
+```
 
-## Framework Files
+Or import and use programmatically:
 
-- `/docs/PROJECT.md` - Main requirements, tests, and architectural decisions
-- `/docs/ROLES.md` - Role definitions and responsibilities  
-- `/docs/PROMPTS.md` - AI agent prompts for each role
-- `/docs/WORKFLOW.md` - Process guidelines and state management
+```python
+from wordle_solver import WordleSolver
 
-## About the Name: Sancak
+solver = WordleSolver()
+solver.solve()
+```
 
-**Sancak** means *flag*, *banner*, or *standard* in Turkish. As a project seeking to enforce the critical roles in a software project, **Sancak** acts as a standard-bearer for disciplined, collaborative development. It symbolizes the unifying principles under which architects, engineers, product managers, testers, and AI agents align — ensuring clarity, accountability, and rigorous progress at every step. Just as a banner guides and inspires those who march under it, the **Sancak** methodology provides a visible standard for building software the “right way.”
+### Interactive Session Guide
 
-## Acknowledgments
+1. **Start the solver**: Run `python3 wordle_solver.py`
 
-This framework was inspired by the markdown files in ai-dev-tasks [https://github.com/snarktank/ai-dev-tasks] by snarktank, particularly their approach to using structured markdown files for AI-assisted development workflows. 
+2. **Enter your first guess**: 
+   - The solver suggests "SAINT" as the default first guess
+   - Press Enter to use the default, or type your own 5-letter word
+   - The solver accepts input in any case (uppercase, lowercase, or mixed)
 
-The files in this repo were created with the assistance of Anthropic/Claude. 
+3. **Enter green letters feedback**:
+   - Green letters = correct letter in correct position
+   - Use dots (`.`) for unknown positions
+   - Example: If you guessed "SAINT" and got S and T in correct positions, enter `S..NT`
 
-### License
-The contents of this repo are licensed under the Creative Commons Attribution-ShareAlike 4.0 license. https://creativecommons.org/licenses/by-sa/4.0/deed.en
+4. **Enter yellow letters feedback**:
+   - Yellow letters = correct letter in wrong position
+   - Use dots (`.`) for positions where the letter is NOT located
+   - Example: If A is in the word but not in position 2, enter `.A...`
+
+5. **Enter grey letters**:
+   - Grey letters = letters not in the word at all
+   - Enter space-separated letters (e.g., `E R T`)
+   - Can be uppercase, lowercase, or mixed
+
+6. **Review suggestions**:
+   - The solver displays filtered candidate words
+   - A suggested next guess is provided
+   - Repeat steps 2-5 until the puzzle is solved
+
+7. **Exit**: Type `quit` at any prompt to exit
+
+### Example Session
+
+```
+Welcome to Wordle Solver!
+Enter 'quit' at any time to exit.
+
+--- Round 1 ---
+Enter your guess (default: SAINT): 
+Enter green letters feedback (use dots for unknown positions, e.g., 'S..NT'): .....
+Enter yellow letters feedback (use dots for positions, e.g., '.A...'): .A...
+Enter grey letters (space-separated, e.g., 'E R T'): E R
+
+Found 15 candidate word(s):
+  CHANT GRANT PLANT SAINT SLANT
+
+Suggested next guess: SAINT
+
+--- Round 2 ---
+Enter your guess (default: SAINT): PLANT
+Enter green letters feedback (use dots for unknown positions, e.g., 'S..NT'): PLAN.
+Enter yellow letters feedback (use dots for positions, e.g., '.A...'): .....
+Enter grey letters (space-separated, e.g., 'E R T'): 
+
+Found 2 candidate word(s):
+  PLANE PLANT
+
+Suggested next guess: PLANE
+
+--- Round 3 ---
+Enter your guess (default: SAINT): PLANE
+Enter green letters feedback (use dots for unknown positions, e.g., 'S..NT'): PLANT
+
+🎉 Congratulations! Puzzle solved!
+```
+
+## Understanding Feedback Format
+
+### Green Letters
+- **Format**: 5-character string with letters and dots
+- **Meaning**: Letters in correct positions
+- **Example**: `S..NT` means:
+  - Position 1: S (correct)
+  - Position 2: unknown
+  - Position 3: unknown
+  - Position 4: N (correct)
+  - Position 5: T (correct)
+
+### Yellow Letters
+- **Format**: 5-character string with letters and dots
+- **Meaning**: Letters present in word but NOT in this position
+- **Example**: `.A...` means:
+  - A is in the word somewhere
+  - A is NOT in position 2 (where it appears in your guess)
+
+### Grey Letters
+- **Format**: Space-separated letters
+- **Meaning**: Letters not in the word at all
+- **Example**: `E R T` means E, R, and T are not in the word
+
+## Features
+
+- **Smart Filtering**: Uses regex-based filtering for efficient constraint application
+- **Frequency Analysis**: Leverages positional letter frequency data for optimal suggestions
+- **Automatic Expansion**: When no candidates match, automatically expands using frequency data
+- **Input Validation**: Gracefully handles invalid input with clear error messages
+- **Case Insensitive**: Accepts input in any case format
+- **Interactive Loop**: Continues until puzzle solved or user exits
+
+## Troubleshooting
+
+### "No candidate words found"
+- This is normal when constraints are very restrictive
+- The solver will automatically try to expand candidates using frequency data
+- If still empty, try entering more guesses to gather more information
+
+### Invalid Input Errors
+- **Guess**: Must be exactly 5 letters, alphabetic only
+- **Green/Yellow feedback**: Must be exactly 5 characters (letters and dots only)
+- **Grey letters**: Space-separated letters, any length
+
+### File Not Found Errors
+- Ensure all required files exist in `/tmp/`
+- Check file permissions (must be readable)
+- Verify file format (one item per line)
+
+## Customization
+
+You can customize file paths when creating a solver instance:
+
+```python
+from wordle_solver import WordleSolver
+
+# Use custom paths
+solver = WordleSolver(
+    frequency_dir='/path/to/frequency/files',
+    words_file='/path/to/wordle-words.txt'
+)
+```
+
+## Project Structure
+
+```
+wordle-solver/
+├── wordle_solver.py      # Main solver implementation
+├── test_wordle_solver.py # Test suite
+├── README.md             # This file
+└── docs/
+    ├── PROJECT.md        # Requirements and specifications
+    ├── ROLES.md          # Development role definitions
+    ├── WORKFLOW.md       # Development workflow
+    └── PROMPTS.md        # AI agent prompts
+```
+
+## Testing
+
+Run the test suite to verify everything works:
+
+```bash
+python3 -m unittest test_wordle_solver -v
+```
+
+## Methodology
+
+This project is implemented using the Sancak methodology framework. See the framework documentation in `/docs` for development methodology details.
