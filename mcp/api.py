@@ -153,3 +153,6 @@ if __name__ == "__main__":
         print("Install with: pip install uvicorn fastapi")
         sys.exit(1)
 
+# Add endpoints
+app.add_api_route("/process_feedback", process_feedback, methods=["POST"])
+app.add_api_route("/", health_check, methods=["GET"])
