@@ -1289,3 +1289,115 @@ class TestChatGPTPluginSupport(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
+"""
+Test to verify constraint accumulation across rounds
+
+Requirement: Constraints from previous rounds should accumulate and be applied
+in all future rounds. This ensures that discoveries from round 1 are used
+throughout the entire puzzle-solving process.
+"""
+import unittest
+import tempfile
+import os
+from wordle_solver import WordleSolver
+
+
+class TestConstraintAccumulation(unittest.TestCase):
+    """Test that constraints accumulate across multiple rounds"""
+    
+    def setUp(self):
+        """Set up test fixtures"""
+        self.tmpdir = tempfile.mkdtemp()
+        
+        # Create test frequency files
+        for pos in range(1, 6):
+            filepath = os.path.join(self.tmpdir, f'pos{pos}.txt')
+            with open(filepath, 'w') as f:
+                # Create frequency files with common letters
+                f.write('1000 s\n900 e\n800 i\n700 a\n600 r\n500 t\n400 n\n300 o\n200 l\n100 u\n')
+        
+        # Create test word file with words that will test the bug
+        words_file = os.path.join(self.tmpdir, 'wordle-words.txt')
+        test_words = [
+            'saint',  # Round 1 guess
+            'peril',  # The solution
+            'exist',  # Should be excluded in round 2 (has I in position 3)
+            'exile',  # Should be excluded in round 2 (has I in position 3)
+            'pixel',  # Should be excluded in round 2 (has I in position 3)
+            'relic',  # Valid - has I but not in position 3
+            'slice',  # Valid - has I but not in position 3
+            'price',  # Valid - has I but not in position 3
+        ]
+        with open(words_file, 'w') as f:
+            f.write('\n'.join(test_words))
+    
+    def tearDown(self):
+        """Clean up test fixtures"""
+        import shutil
+        shutil.rmtree(self.tmpdir)
+    
+    def test_yellow_constraint_accumulates_across_rounds(self):
+        """
+        Test that yellow constraints from round 1 are applied in round 2
+        
+        Scenario:
+        - Round 1: Guess "SAINT", I is yellow in position 3
+          → I should be excluded from position 3 in all future rounds
+        - Round 2: "EXIST" should NOT be a valid candidate (I is in position 3)
+        
+        Expected: EXIST, EXILE, PIXEL should be excluded because they have I in position 3
+        """
+        solver = WordleSolver(
+            frequency_dir=self.tmpdir,
+            words_file=os.path.join(self.tmpdir, 'wordle-words.txt')
+        )
+        
+        # Round 1: Guess "SAINT", I is yellow in position 3
+        # This means I is in the word but NOT in position 3
+        result1 = solver.process_feedback(
+            guess="saint",
+            greens=".....",  # No green letters
+            yellows="..i..",  # I is yellow in position 3
+            greys=["s", "a", "n", "t"]  # S, A, N, T are grey
+        )
+        
+        # Verify round 1 constraints are set
+        self.assertIn('I', solver.yellow_constraints)
+        self.assertIn(3, solver.yellow_constraints['I'])
+        
+        # Round 2: Process new feedback
+        # The I constraint from round 1 should still apply
+        result2 = solver.process_feedback(
+            guess="relic",
+            greens=".....",  # No green letters yet
+            yellows=".....",  # No new yellow letters
+            greys=["r", "e", "l", "c"]  # New grey letters
+        )
+        
+        # Verify I constraint from round 1 is still present
+        self.assertIn('I', solver.yellow_constraints, 
+                     "Yellow constraint from round 1 should still be present")
+        self.assertIn(3, solver.yellow_constraints['I'],
+                     "I should still be excluded from position 3")
+        
+        # Check that words with I in position 3 are excluded
+        candidates = result2["candidates"]
+        self.assertNotIn("exist", candidates,
+                        "EXIST should be excluded (I is in position 3)")
+        self.assertNotIn("exile", candidates,
+                        "EXILE should be excluded (I is in position 3)")
+        self.assertNotIn("pixel", candidates,
+                        "PIXEL should be excluded (I is in position 3)")
+        
+        # Words with I but not in position 3 should be included
+        # Note: These might be filtered out by other constraints, but if they exist,
+        # they should not have I in position 3
+        for candidate in candidates:
+            if 'i' in candidate:
+                self.assertNotEqual(candidate[2], 'i',
+                                  f"{candidate} should not have I in position 3")
+
+
+if __name__ == '__main__':
+    unittest.main()
+

@@ -624,13 +624,16 @@ class WordleSolver:
             if green_feedback is None:
                 return False
             
-            # Update green constraints
-            self.green_constraints = self.convert_green_letters(green_feedback)
-            
             # Check if puzzle is solved (all positions are green)
-            if len(self.green_constraints) == self.WORD_LENGTH:
-                print("\n🎉 Congratulations! Puzzle solved!")
-                return True
+            # Note: We check after process_feedback which merges constraints
+            # But we need to check the new green feedback specifically
+            new_green_constraints = self.convert_green_letters(green_feedback.upper())
+            if len(new_green_constraints) == self.WORD_LENGTH:
+                # Update constraints and check
+                self.green_constraints.update(new_green_constraints)
+                if len(self.green_constraints) == self.WORD_LENGTH:
+                    print("\n🎉 Congratulations! Puzzle solved!")
+                    return True
             
             # Requirement 4.3: Prompt for yellow letters
             yellow_feedback = self._prompt_with_validation(
@@ -703,17 +706,26 @@ class WordleSolver:
         yellows_upper = yellows.upper()
         greys_upper = [g.upper() for g in greys]
         
-        # Update constraints based on feedback
+        # Update constraints based on feedback - MERGE with existing constraints
         # Requirement 2.3: Convert green letters to position mapping
-        self.green_constraints = self.convert_green_letters(greens_upper)
+        new_green_constraints = self.convert_green_letters(greens_upper)
+        # Merge green constraints: new greens override existing ones for same positions
+        self.green_constraints.update(new_green_constraints)
         
         # Requirement 2.5: Convert yellow letters to excluded positions mapping
-        self.yellow_constraints = self.convert_yellow_letters(yellows_upper)
+        new_yellow_constraints = self.convert_yellow_letters(yellows_upper)
+        # Merge yellow constraints: add new excluded positions to existing letters
+        for letter, excluded_positions in new_yellow_constraints.items():
+            if letter in self.yellow_constraints:
+                # Merge excluded positions sets
+                self.yellow_constraints[letter].update(excluded_positions)
+            else:
+                # Add new yellow letter constraint
+                self.yellow_constraints[letter] = excluded_positions.copy()
         
         # Requirement 2.7: Convert grey letters to excluded set
-        # Note: This replaces existing grey constraints (for MCP use case)
-        # For CLI, we use update() to accumulate across rounds
-        self.grey_constraints = set(greys_upper)
+        # Merge grey constraints: add new grey letters to existing set
+        self.grey_constraints.update(greys_upper)
         
         # Requirement 5.1: Filter candidate words using regex-based filtering
         self.filter_candidates()
