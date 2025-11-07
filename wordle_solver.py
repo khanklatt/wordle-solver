@@ -225,10 +225,10 @@ class WordleSolver:
     
     def get_suggested_next_guess(self) -> Optional[List[Tuple[str, int]]]:
         """
-        Get suggested next guess using vowel prioritization and positional frequency scoring
+        Get suggested next guess using positional frequency scoring
         
-        Requirement 3.4: Prioritize words with most vowels
-        Requirement 3.5: Score words based on positional frequency line numbers
+        Requirement 3.5: Compute word score for all suggested words (not just ones with most vowels)
+        Words are grouped by score, with lowest scores shown first
         Requirement 3.5.1: Return all scored words for display
         
         Returns:
@@ -237,23 +237,15 @@ class WordleSolver:
         if not self.candidate_words:
             return None
         
-        # Requirement 3.4: Get words with most vowels
-        vowel_words = self.get_words_with_most_vowels()
-        
-        if not vowel_words:
-            # Fallback to all candidates if no vowels found (shouldn't happen with valid words)
-            vowel_words = self.candidate_words
-        
-        # Requirement 3.5: Score the vowel-rich words
-        # Pass vowel_words as parameter instead of mutating state
-        scored_words = self.compute_word_scores(candidate_words=vowel_words)
+        # Requirement 3.5: Score all candidate words
+        scored_words = self.compute_word_scores(candidate_words=self.candidate_words)
         
         if scored_words:
-            # Requirement 3.5.1: Return all scored words
+            # Requirement 3.5.1: Return all scored words, grouped by score (lowest first)
             return scored_words
         
-        # Fallback: create scored list from vowel words with score 0
-        return [(word, 0) for word in sorted(vowel_words)]
+        # Fallback: create scored list from all candidates with score 0
+        return [(word, 0) for word in sorted(self.candidate_words)]
     
     def get_default_first_guess(self) -> str:
         """
@@ -407,7 +399,8 @@ class WordleSolver:
         """
         Split candidate words into unique letters and repeated letters sections
         
-        Requirement 3.2: Return candidate sets split into two sections - unique letters and repeated letters
+        DEPRECATED: Requirement 3.2 has been deprecated. This method is kept for backward compatibility
+        but is no longer used in the display logic.
         
         Returns:
             Tuple of (unique_letters_words, repeated_letters_words) sets
@@ -432,34 +425,22 @@ class WordleSolver:
         Display filtered candidate words after each constraint application
         
         Requirement 4.5: Display filtered candidate words after each constraint application
-        Requirement 3.2: Display candidates split into unique letters and repeated letters sections
         Requirement 5.3: Provide clear, human-readable prompts and feedback messages
         
+        Note: Requirement 3.2 (two-section display) has been deprecated. Candidates are now
+        displayed as a sorted list, with scoring used to prioritize viable solutions.
         """
         if not self.candidate_words:
             print("No candidate words found.")
             return
         
-        # Requirement 3.2: Split into unique letters and repeated letters sections
-        unique_words, repeated_words = self.split_candidates_by_letter_uniqueness()
-        
         print(f"\nFound {len(self.candidate_words)} candidate word(s):")
         
-        # Section 1: Words with unique letters
-        if unique_words:
-            print(f"\nSection 1 - Unique letters ({len(unique_words)} word(s)):")
-            sorted_unique = sorted(unique_words)
-            for i in range(0, len(sorted_unique), self.WORDS_PER_LINE):
-                line_words = sorted_unique[i:i+self.WORDS_PER_LINE]
-                print("  " + " ".join(word.upper() for word in line_words))
-        
-        # Section 2: Words with repeated letters
-        if repeated_words:
-            print(f"\nSection 2 - Repeated letters ({len(repeated_words)} word(s)):")
-            sorted_repeated = sorted(repeated_words)
-            for i in range(0, len(sorted_repeated), self.WORDS_PER_LINE):
-                line_words = sorted_repeated[i:i+self.WORDS_PER_LINE]
-                print("  " + " ".join(word.upper() for word in line_words))
+        # Display candidates as sorted list (no longer split into sections per deprecated 3.2)
+        sorted_candidates = sorted(self.candidate_words)
+        for i in range(0, len(sorted_candidates), self.WORDS_PER_LINE):
+            line_words = sorted_candidates[i:i+self.WORDS_PER_LINE]
+            print("  " + " ".join(word.upper() for word in line_words))
     
     def display_suggested_guess(self, scored_words: Optional[List[Tuple[str, int]]] = None) -> None:
         """

@@ -590,7 +590,8 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
         """
         Test Case 3.2.1: System splits candidate words into unique letters and repeated letters sections
         
-        Requirement 3.2: Return candidate sets split into two sections - unique letters and repeated letters
+        DEPRECATED: Requirement 3.2 has been deprecated. This test is kept for backward compatibility
+        but the functionality is no longer used in the display logic.
         
         Given: Candidate words include both unique-letter words and words with repeated letters
         When: split_candidates_by_letter_uniqueness is called
@@ -694,11 +695,14 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
     
     def test_suggest_next_guess_using_vowels_and_scores(self):
         """
-        Test Case 3.4-3.5 Integration: System suggests next guess using vowel prioritization and scoring
+        Test Case 3.4-3.5 Integration: System suggests next guess using scoring for all words
+        
+        Requirement 3.5: Compute word score for all suggested words (not just ones with most vowels)
+        Words are grouped by score, with lowest scores shown first
         
         Given: Candidate words with varying vowels and scores
         When: get_suggested_next_guess is called
-        Then: Returns word with most vowels, scored and ranked by positional frequency
+        Then: Returns all candidate words scored and ranked by positional frequency (lowest first)
         """
         import tempfile
         import os
@@ -716,21 +720,21 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
                     f.write('1000 u\n900 i\n800 s\n700 e\n')
             
             solver = WordleSolver(frequency_dir=tmpdir)
-            solver.candidate_words = {'brisk', 'chips', 'clips', 'guise', 'hoise', 'moise', 'poise', 'prism'}
+            candidate_words = {'brisk', 'chips', 'clips', 'guise', 'hoise', 'moise', 'poise', 'prism'}
+            solver.candidate_words = candidate_words
             solver.green_constraints = {}  # All positions unknown
             
-            # Get suggested guess (now returns list of scored words)
+            # Get suggested guess (now returns list of scored words for ALL candidates)
             scored_words = solver.get_suggested_next_guess()
             
             # Should return list of scored words
             self.assertIsInstance(scored_words, list)
             self.assertGreater(len(scored_words), 0)
             
-            # Should contain vowel-rich words (guise, hoise, moise, poise)
+            # Requirement 3.5: Should contain ALL candidate words (not just vowel-rich ones)
             scored_word_set = {word.lower() for word, score in scored_words}
-            vowel_words = {'guise', 'hoise', 'moise', 'poise'}
-            self.assertTrue(vowel_words.issubset(scored_word_set), 
-                          f"Scored words should include all vowel-rich words. Got: {scored_word_set}")
+            self.assertEqual(scored_word_set, {w.lower() for w in candidate_words},
+                          f"Scored words should include ALL candidate words. Got: {scored_word_set}, Expected: {candidate_words}")
             
             # GUISE should be first (lowest score, G is at line 1)
             self.assertEqual(scored_words[0][0].lower(), 'guise')
