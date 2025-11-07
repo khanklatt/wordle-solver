@@ -30,6 +30,8 @@ class WordleSolver:
     WORDS_PER_LINE = 10
     MAX_LETTERS_IN_ALPHABET = 26
     VOWELS = set('aeiou')
+    MAX_EXPANDED_CANDIDATES = 10
+    MAX_LETTERS_PER_POSITION_FOR_EXPANSION = 5
     
     def __init__(self, frequency_dir: Optional[str] = None, words_file: Optional[str] = None):
         """
@@ -63,7 +65,6 @@ class WordleSolver:
             if os.path.exists(filepath):
                 try:
                     with open(filepath, 'r') as f:
-                        # Store the file content for now (will extract top-N in req 1.2)
                         self.positional_frequencies[pos] = f.read()
                 except IOError as e:
                     raise IOError(f"Failed to load frequency file {filepath}: {e}") from e
@@ -72,7 +73,6 @@ class WordleSolver:
         if os.path.exists(words_file):
             try:
                 with open(words_file, 'r') as f:
-                    # Store words as lowercase set for efficient lookup
                     self.valid_words = {line.strip().lower() for line in f if line.strip()}
             except IOError as e:
                 raise IOError(f"Failed to load word list {words_file}: {e}") from e
@@ -277,8 +277,6 @@ class WordleSolver:
         """
         user_input = input("Enter your guess: ").strip()
         # Empty input will be caught by validation in solve() method
-        
-        # Convert to uppercase (case insensitive per requirement 2.1)
         return user_input.upper()
     
     def prompt_for_green_letters(self) -> str:
@@ -679,14 +677,9 @@ class WordleSolver:
         """
         Process Wordle feedback and return candidates and suggestions
         
-        Requirement 6.2: Refactor solver logic into a clean, callable function
-        Requirement 6.2.1: Function named process_feedback
-        Requirement 6.2.2: Takes guess, greens, yellows, greys parameters
-        Requirement 6.2.3: Returns dictionary with candidates and suggestions
-        
-        This method processes feedback without user interaction, making it suitable
-        for programmatic use (e.g., MCP tools) while maintaining the same core logic
-        as the interactive solve() method.
+        This method processes feedback without user interaction, maintaining the same
+        core logic as the interactive solve() method. It merges constraints across
+        rounds to ensure discoveries from previous rounds are applied in future rounds.
         
         Args:
             guess: The guessed word (e.g., "saint")
@@ -699,32 +692,54 @@ class WordleSolver:
                 - candidates: List of candidate words (strings)
                 - suggestions: List of dictionaries with "word" and "score" keys
                   Example: [{"word": "GUISE", "score": 19}, {"word": "POISE", "score": 20}]
+        
+        Raises:
+            ValueError: If input parameters are invalid
         """
-        # Convert inputs to proper format
+        # Validate inputs
+        if not guess or not isinstance(guess, str):
+            raise ValueError(f"Guess must be a non-empty string")
+        if len(guess) != self.WORD_LENGTH:
+            raise ValueError(f"Guess must be exactly {self.WORD_LENGTH} letters (got {len(guess)})")
+        if not guess.isalpha():
+            raise ValueError("Guess must contain only letters")
+        
+        if not greens or not isinstance(greens, str):
+            raise ValueError(f"Greens must be a non-empty string")
+        if len(greens) != self.WORD_LENGTH:
+            raise ValueError(f"Greens must be exactly {self.WORD_LENGTH} characters (got {len(greens)})")
+        if not all(c.isalpha() or c == '.' for c in greens):
+            raise ValueError("Greens must contain only letters and dots")
+        
+        if not yellows or not isinstance(yellows, str):
+            raise ValueError(f"Yellows must be a non-empty string")
+        if len(yellows) != self.WORD_LENGTH:
+            raise ValueError(f"Yellows must be exactly {self.WORD_LENGTH} characters (got {len(yellows)})")
+        if not all(c.isalpha() or c == '.' for c in yellows):
+            raise ValueError("Yellows must contain only letters and dots")
+        
+        if not isinstance(greys, list):
+            raise ValueError("Greys must be a list")
+        for grey in greys:
+            if not isinstance(grey, str) or len(grey) != 1 or not grey.isalpha():
+                raise ValueError(f"Each grey letter must be a single alphabetic character (got '{grey}')")
+        
         guess_upper = guess.upper()
         greens_upper = greens.upper()
         yellows_upper = yellows.upper()
         greys_upper = [g.upper() for g in greys]
         
         # Update constraints based on feedback - MERGE with existing constraints
-        # Requirement 2.3: Convert green letters to position mapping
         new_green_constraints = self.convert_green_letters(greens_upper)
-        # Merge green constraints: new greens override existing ones for same positions
         self.green_constraints.update(new_green_constraints)
         
-        # Requirement 2.5: Convert yellow letters to excluded positions mapping
         new_yellow_constraints = self.convert_yellow_letters(yellows_upper)
-        # Merge yellow constraints: add new excluded positions to existing letters
         for letter, excluded_positions in new_yellow_constraints.items():
             if letter in self.yellow_constraints:
-                # Merge excluded positions sets
                 self.yellow_constraints[letter].update(excluded_positions)
             else:
-                # Add new yellow letter constraint
                 self.yellow_constraints[letter] = excluded_positions.copy()
         
-        # Requirement 2.7: Convert grey letters to excluded set
-        # Merge grey constraints: add new grey letters to existing set
         self.grey_constraints.update(greys_upper)
         
         # Requirement 5.1: Filter candidate words using regex-based filtering
@@ -742,11 +757,128 @@ class WordleSolver:
             for word, score in scored_words:
                 suggestions.append({"word": word.upper(), "score": score})
         
-        # Requirement 6.2.3: Return dictionary with candidates and suggestions
         return {
             "candidates": candidates,
             "suggestions": suggestions
         }
+    
+    def _word_matches_yellow_constraints(self, word: str) -> bool:
+        """
+        Check if word satisfies all yellow letter constraints
+        
+        Args:
+            word: Word to check (lowercase)
+            
+        Returns:
+            True if word satisfies all yellow constraints, False otherwise
+        """
+        for yellow_letter, excluded_positions in self.yellow_constraints.items():
+            if yellow_letter.lower() not in word:
+                return False
+            for excluded_pos in excluded_positions:
+                if word[excluded_pos - 1] == yellow_letter.lower():
+                    return False
+        return True
+    
+    def _build_position_pattern(self, pos: int, green_letter: Optional[str], excluded_letters: Set[str]) -> str:
+        """
+        Build regex pattern for a single position
+        
+        Args:
+            pos: Position number (1-indexed)
+            green_letter: Fixed letter for this position (if any)
+            excluded_letters: Set of letters to exclude from this position
+            
+        Returns:
+            Regex pattern string for this position
+        """
+        if green_letter:
+            return green_letter.lower()
+        if excluded_letters:
+            excluded_chars = ''.join(sorted(excluded_letters))
+            return f'[^{excluded_chars}]'
+        return '[a-z]'
+    
+    def _filter_grey_letters(self, candidates: Set[str]) -> Set[str]:
+        """
+        Filter out words containing grey letters
+        
+        Args:
+            candidates: Set of candidate words to filter
+            
+        Returns:
+            Filtered set of candidates without grey letters
+        """
+        if not self.grey_constraints:
+            return candidates
+        grey_pattern = '|'.join(self.grey_constraints)
+        return {w for w in candidates if not re.search(grey_pattern, w, re.IGNORECASE)}
+    
+    def _build_regex_pattern(self) -> Tuple[List[str], Set[str]]:
+        """
+        Build regex pattern for all positions based on green and yellow constraints
+        
+        Returns:
+            Tuple of (regex_pattern_list, yellow_letters_to_include_set)
+        """
+        regex_pattern = [''] * self.WORD_LENGTH
+        
+        for pos, letter in self.green_constraints.items():
+            regex_pattern[pos - 1] = letter.lower()
+        
+        yellow_letters_to_include = set()
+        position_exclusions: Dict[int, Set[str]] = {}
+        
+        for letter, excluded_positions in self.yellow_constraints.items():
+            yellow_letters_to_include.add(letter.lower())
+            for pos in excluded_positions:
+                if not regex_pattern[pos - 1]:
+                    if pos not in position_exclusions:
+                        position_exclusions[pos] = set()
+                    position_exclusions[pos].add(letter.lower())
+        
+        for i in range(self.WORD_LENGTH):
+            if regex_pattern[i]:
+                continue
+            excluded = position_exclusions.get(i + 1, set())
+            regex_pattern[i] = self._build_position_pattern(i + 1, None, excluded)
+        
+        return regex_pattern, yellow_letters_to_include
+    
+    def _apply_regex_filter(self, candidates: Set[str], regex_pattern: List[str]) -> Set[str]:
+        """
+        Apply regex pattern to filter candidates
+        
+        Args:
+            candidates: Set of candidate words
+            regex_pattern: List of regex patterns for each position
+            
+        Returns:
+            Filtered set of candidates matching the regex pattern
+        """
+        pattern = '^' + ''.join(regex_pattern) + '$'
+        return {w for w in candidates if re.match(pattern, w)}
+    
+    def _verify_yellow_letters(self, candidates: Set[str], yellow_letters_to_include: Set[str]) -> Set[str]:
+        """
+        Verify that candidates contain all required yellow letters
+        
+        Args:
+            candidates: Set of candidate words
+            yellow_letters_to_include: Set of yellow letters that must be present
+            
+        Returns:
+            Filtered set of candidates containing all required yellow letters
+        """
+        if not yellow_letters_to_include:
+            return candidates
+        
+        final_candidates = set()
+        for word in candidates:
+            word_letters = set(word.lower())
+            if yellow_letters_to_include.issubset(word_letters):
+                final_candidates.add(word)
+        return final_candidates
     
     def filter_candidates(self) -> None:
         """
@@ -758,70 +890,111 @@ class WordleSolver:
         Requirement 3.1.3: Grey letters: Exclude words containing grey letters
         
         This method applies all constraints to filter the candidate word set.
+        
+        Example:
+            Given constraints:
+            - Green: position 3 = 'I' (..i..)
+            - Yellow: 'S' excluded from position 1 (s....)
+            - Grey: ['A', 'N', 'T']
+            
+            Input: valid_words = {'saint', 'guise', 'poise', 'noise'}
+            After filtering: candidate_words = {'guise', 'poise', 'noise'}
+            (saint excluded due to grey letters A, N, T)
         """
         if not self.valid_words:
             self.candidate_words = set()
             return
         
-        # Start with all valid words
         candidates = self.valid_words.copy()
-        
-        # Requirement 3.1.3: Grey letters - exclude words containing grey letters
-        if self.grey_constraints:
-            grey_pattern = '|'.join(self.grey_constraints)
-            candidates = {w for w in candidates if not re.search(grey_pattern, w, re.IGNORECASE)}
-        
-        # Requirement 3.1.1: Green letters - build regex pattern for fixed positions
-        regex_pattern = [''] * self.WORD_LENGTH  # Initialize pattern for all positions
-        for pos, letter in self.green_constraints.items():
-            regex_pattern[pos - 1] = letter.lower()  # Convert to lowercase for matching
-        
-        # Requirement 3.1.2: Yellow letters - include in positions without GREEN, exclude from YELLOW positions
-        yellow_letters_to_include = set()
-        for letter, excluded_positions in self.yellow_constraints.items():
-            yellow_letters_to_include.add(letter.lower())
-            # Mark excluded positions in regex pattern
-            for pos in excluded_positions:
-                if not regex_pattern[pos - 1]:  # Only if position not already fixed by green
-                    # Build negative lookahead or character class excluding this letter
-                    if regex_pattern[pos - 1] == '':
-                        regex_pattern[pos - 1] = f'[^{letter.lower()}]'
-                    else:
-                        # If already has a pattern, rebuild character class to exclude letter
-                        if regex_pattern[pos - 1].startswith('[^'):
-                            # Extract existing exclusions and add new one
-                            existing = regex_pattern[pos - 1][2:-1]  # Remove [^ and ]
-                            if letter.lower() not in existing:
-                                regex_pattern[pos - 1] = f'[^{existing}{letter.lower()}]'
-                        else:
-                            # Create new exclusion pattern
-                            regex_pattern[pos - 1] = f'[^{letter.lower()}]'
-        
-        # Build final regex pattern
-        for i in range(self.WORD_LENGTH):
-            if regex_pattern[i] == '':
-                # Position not fixed - allow any letter
-                regex_pattern[i] = '[a-z]'
-        
-        # Apply regex filtering
-        pattern = '^' + ''.join(regex_pattern) + '$'
-        regex_candidates = {w for w in candidates if re.match(pattern, w)}
-        
-        # Ensure yellow letters are present in the word (if any yellow constraints)
-        if yellow_letters_to_include:
-            final_candidates = set()
-            for word in regex_candidates:
-                word_letters = set(word.lower())
-                # Check that all required yellow letters are present
-                if yellow_letters_to_include.issubset(word_letters):
-                    final_candidates.add(word)
-            regex_candidates = final_candidates
+        candidates = self._filter_grey_letters(candidates)
+        regex_pattern, yellow_letters_to_include = self._build_regex_pattern()
+        regex_candidates = self._apply_regex_filter(candidates, regex_pattern)
+        regex_candidates = self._verify_yellow_letters(regex_candidates, yellow_letters_to_include)
         
         self.candidate_words = regex_candidates
         
-        # Requirement 3.3: If candidate set is empty, expand using positional frequencies
         if not self.candidate_words:
             self.expand_candidates_when_empty()
+    
+    def _validate_expanded_candidate(self, word: str) -> bool:
+        """
+        Validate that an expanded candidate word matches all constraints
+        
+        Args:
+            word: Word to validate (lowercase)
+            
+        Returns:
+            True if word matches all constraints, False otherwise
+        """
+        if any(grey_letter.lower() in word for grey_letter in self.grey_constraints):
+            return False
+        return self._word_matches_yellow_constraints(word)
+    
+    def _expand_single_unfixed_position(
+        self, 
+        base_word: List[str], 
+        unfixed_pos: int, 
+        position_letters: Dict[int, List[str]]
+    ) -> Set[str]:
+        """
+        Expand candidates when only one position is unfixed
+        
+        Args:
+            base_word: Base word pattern with fixed positions filled
+            unfixed_pos: Position number that is unfixed (1-indexed)
+            position_letters: Dictionary mapping position to available letters
+            
+        Returns:
+            Set of valid expanded candidate words
+        """
+        expanded_candidates = set()
+        for letter in position_letters[unfixed_pos]:
+            candidate = base_word.copy()
+            candidate[unfixed_pos - 1] = letter
+            word = ''.join(candidate)
+            if word in self.valid_words and self._validate_expanded_candidate(word):
+                expanded_candidates.add(word)
+                if len(expanded_candidates) >= self.MAX_EXPANDED_CANDIDATES:
+                    break
+        return expanded_candidates
+    
+    def _expand_multiple_unfixed_positions(
+        self,
+        base_word: List[str],
+        unfixed_positions: List[int],
+        position_letters: Dict[int, List[str]]
+    ) -> Set[str]:
+        """
+        Expand candidates when multiple positions are unfixed
+        
+        Args:
+            base_word: Base word pattern with fixed positions filled
+            unfixed_positions: List of unfixed position numbers (1-indexed)
+            position_letters: Dictionary mapping position to available letters
+            
+        Returns:
+            Set of valid expanded candidate words
+        """
+        expanded_candidates = set()
+        if not unfixed_positions:
+            return expanded_candidates
+        
+        pos = unfixed_positions[0]
+        for letter in position_letters[pos][:self.MAX_LETTERS_PER_POSITION_FOR_EXPANSION]:
+            candidate = base_word.copy()
+            candidate[pos - 1] = letter
+            partial_word = ''.join(c if c else '.' for c in candidate)
+            pattern = '^' + partial_word.replace('.', '[a-z]') + '$'
+            
+            for word in self.valid_words:
+                if re.match(pattern, word) and self._validate_expanded_candidate(word):
+                    expanded_candidates.add(word)
+                    if len(expanded_candidates) >= self.MAX_EXPANDED_CANDIDATES:
+                        break
+            if len(expanded_candidates) >= self.MAX_EXPANDED_CANDIDATES:
+                break
+        
+        return expanded_candidates
     
     def expand_candidates_when_empty(self) -> None:
         """
@@ -836,115 +1009,43 @@ class WordleSolver:
         4. Skipping letters that are in grey_constraints
         5. Adding valid words that match all constraints
         
-        Example: If first 4 letters are PLAN and pos5.txt contains e,y,a,t,r,
-        and E is grey, it will check plany, plana, plant, etc. until finding valid words.
+        Example:
+            Given:
+            - Green constraints: {1: 'P', 2: 'L', 3: 'A', 4: 'N'} (PLAN fixed)
+            - Grey constraints: {'E'}
+            - pos5.txt contains: e, y, a, t, r (in frequency order)
+            
+            Process:
+            1. Unfixed position: 5
+            2. Try 'y' from pos5.txt -> 'plany' (if valid word)
+            3. Try 'a' from pos5.txt -> 'plana' (if valid word)
+            4. Try 't' from pos5.txt -> 'plant' (valid word, added to candidates)
+            5. Stop after finding MAX_EXPANDED_CANDIDATES words
         """
         if not self.candidate_words and self.valid_words:
-            # Find unfixed positions (positions not in green_constraints)
             fixed_positions = set(self.green_constraints.keys())
             unfixed_positions = [pos for pos in range(1, self.WORD_LENGTH + 1) if pos not in fixed_positions]
             
             if not unfixed_positions:
-                # All positions are fixed, no expansion needed
                 return
             
-            # Start with a base pattern from green constraints
             base_word = [''] * self.WORD_LENGTH
             for pos, letter in self.green_constraints.items():
                 base_word[pos - 1] = letter.lower()
             
-            # For each unfixed position, get letters from frequency file
-            # We'll expand incrementally, starting with top letters
-            expanded_candidates = set()
-            
-            # Get letters for each unfixed position from frequency files
-            position_letters = {}
+            position_letters: Dict[int, List[str]] = {}
             for pos in unfixed_positions:
-                # Get all letters from frequency file for this position (up to reasonable limit)
                 letters = self.extract_top_letters(pos, n=self.MAX_LETTERS_IN_ALPHABET)
-                # Filter out grey letters
                 filtered_letters = [l for l in letters if l.upper() not in self.grey_constraints]
                 position_letters[pos] = filtered_letters
-            
-            # Generate candidate words by trying combinations
-            # For simplicity, we'll generate words by filling unfixed positions with frequency letters
-            # Start with single unfixed position case (most common)
             if len(unfixed_positions) == 1:
-                pos = unfixed_positions[0]
-                for letter in position_letters[pos]:
-                    candidate = base_word.copy()
-                    candidate[pos - 1] = letter
-                    word = ''.join(candidate)
-                    
-                    # Check if word is valid and matches all constraints
-                    if word in self.valid_words:
-                        # Verify it matches green constraints (already built in)
-                        # Verify it doesn't contain grey letters (already filtered)
-                        # Verify yellow constraints if any
-                        matches = True
-                        
-                        # Check yellow constraints: letter must be present but not in excluded positions
-                        for yellow_letter, excluded_positions in self.yellow_constraints.items():
-                            if yellow_letter.lower() not in word:
-                                matches = False
-                                break
-                            # Check that yellow letter is not in any excluded position
-                            for excluded_pos in excluded_positions:
-                                if word[excluded_pos - 1] == yellow_letter.lower():
-                                    matches = False
-                                    break
-                            if not matches:
-                                break
-                        
-                        if matches:
-                            expanded_candidates.add(word)
-                            # Stop after finding first valid word (per requirement: "until it reaches plant")
-                            # Actually, let's collect a few candidates for better suggestions
-                            if len(expanded_candidates) >= 10:  # Limit to top 10
-                                break
+                expanded_candidates = self._expand_single_unfixed_position(
+                    base_word, unfixed_positions[0], position_letters
+                )
             else:
-                # Multiple unfixed positions - more complex, generate combinations
-                # For now, prioritize first unfixed position
-                if unfixed_positions:
-                    pos = unfixed_positions[0]
-                    for letter in position_letters[pos][:5]:  # Limit to top 5 for performance
-                        candidate = base_word.copy()
-                        candidate[pos - 1] = letter
-                        # For remaining positions, try common letters or leave flexible
-                        # This is a simplified approach - could be enhanced
-                        partial_word = ''.join(c if c else '.' for c in candidate)
-                        # Match against valid words
-                        pattern = '^' + partial_word.replace('.', '[a-z]') + '$'
-                        for word in self.valid_words:
-                            if re.match(pattern, word):
-                                # Check constraints
-                                matches = True
-                                # Check grey letters
-                                for grey_letter in self.grey_constraints:
-                                    if grey_letter.lower() in word:
-                                        matches = False
-                                        break
-                                if not matches:
-                                    continue
-                                
-                                # Check yellow constraints
-                                for yellow_letter, excluded_positions in self.yellow_constraints.items():
-                                    if yellow_letter.lower() not in word:
-                                        matches = False
-                                        break
-                                    for excluded_pos in excluded_positions:
-                                        if word[excluded_pos - 1] == yellow_letter.lower():
-                                            matches = False
-                                            break
-                                    if not matches:
-                                        break
-                                
-                                if matches:
-                                    expanded_candidates.add(word)
-                                    if len(expanded_candidates) >= 10:
-                                        break
-                        if len(expanded_candidates) >= 10:
-                            break
+                expanded_candidates = self._expand_multiple_unfixed_positions(
+                    base_word, unfixed_positions, position_letters
+                )
             
             self.candidate_words = expanded_candidates
 
