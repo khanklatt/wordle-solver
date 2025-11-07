@@ -1,0 +1,18 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Wordle Solver",
+  "name_for_model": "wordle_solver",
+  "description_for_human": "An intelligent Wordle puzzle solver that analyzes letter frequencies and suggests optimal guesses based on feedback. Helps you solve Wordle puzzles by filtering candidate words and providing scored suggestions.",
+  "description_for_model": "A Wordle solver tool that processes feedback (green/yellow/grey letters) and returns filtered candidate words with scored suggestions. Use this when users need help solving Wordle puzzles. The tool accepts a guess word, green letters (correct position), yellow letters (wrong position), and grey letters (not in word), then returns candidate words and scored suggestions.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "http://localhost:8000/openapi.yaml",
+    "is_user_authenticated": false
+  },
+  "logo_url": "",
+  "contact_email": "",
+  "legal_info_url": ""
+}

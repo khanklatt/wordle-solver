@@ -198,6 +198,57 @@ Enter green letters feedback (use dots for unknown positions, e.g., 'S..NT'): PL
 - Check file permissions (must be readable)
 - Verify file format (one item per line)
 
+## MCP Tool Support
+
+The Wordle Solver can be used as an MCP (Model Context Protocol) tool for integration with AI assistants.
+
+### HTTP API (Requirement 6.5)
+
+Start the FastAPI server:
+```bash
+python -m uvicorn mcp.api:app --host 0.0.0.0 --port 8000
+```
+
+Make POST requests to `/process_feedback`:
+```bash
+curl -X POST "http://localhost:8000/process_feedback" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "guess": "saint",
+    "greens": "..i..",
+    "yellows": "s....",
+    "greys": ["a", "n", "t"]
+  }'
+```
+
+### Python SDK (Requirement 6.3)
+
+Run the MCP tool directly:
+```bash
+python mcp/wordle_mcp.py
+```
+
+### ChatGPT Plugin (Requirement 6.6)
+
+The Wordle Solver can be used as a ChatGPT plugin:
+
+1. Start the FastAPI server:
+```bash
+python -m uvicorn mcp.api:app --host 0.0.0.0 --port 8000
+```
+
+2. In ChatGPT, go to Settings → Beta features → Plugins → Install an unverified plugin
+
+3. Enter your server URL (e.g., `http://localhost:8000`)
+
+4. ChatGPT will automatically discover the plugin via:
+   - `/.well-known/ai-plugin.json` - Plugin manifest
+   - `/openapi.yaml` - OpenAPI specification
+
+The plugin files are located in:
+- `.well-known/ai-plugin.json` - ChatGPT plugin manifest
+- `openapi.yaml` - OpenAPI 3.0 specification
+
 ## Customization
 
 You can customize file paths when creating a solver instance:

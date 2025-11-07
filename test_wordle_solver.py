@@ -1204,6 +1204,88 @@ class TestFastAPIEndpoint(unittest.TestCase):
             self.skipTest("FastAPI not installed - skipping FastAPI tests")
 
 
+class TestChatGPTPluginSupport(unittest.TestCase):
+    """Tests for Requirement 6.6: ChatGPT Plugin Support"""
+    
+    def test_ai_plugin_json_exists(self):
+        """
+        Test Case 6.6.1: ai-plugin.json file exists in .well-known directory
+        
+        Requirement 6.6: Support for ChatGPT plugins via ai-plugin.json
+        """
+        import os
+        import json
+        
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        plugin_file = os.path.join(project_root, ".well-known", "ai-plugin.json")
+        
+        self.assertTrue(os.path.exists(plugin_file), "ai-plugin.json should exist")
+        
+        # Verify it's valid JSON
+        with open(plugin_file, 'r') as f:
+            plugin_data = json.load(f)
+        
+        # Verify required fields
+        self.assertIn("schema_version", plugin_data)
+        self.assertIn("name_for_human", plugin_data)
+        self.assertIn("name_for_model", plugin_data)
+        self.assertIn("description_for_human", plugin_data)
+        self.assertIn("description_for_model", plugin_data)
+        self.assertIn("api", plugin_data)
+        self.assertEqual(plugin_data["api"]["type"], "openapi")
+        self.assertIn("url", plugin_data["api"])
+    
+    def test_openapi_yaml_exists(self):
+        """
+        Test Case 6.6.2: openapi.yaml file exists
+        
+        Requirement 6.6: Support for ChatGPT plugins via openapi.yaml
+        """
+        import os
+        
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        openapi_file = os.path.join(project_root, "openapi.yaml")
+        
+        self.assertTrue(os.path.exists(openapi_file), "openapi.yaml should exist")
+        
+        # Verify it's readable
+        with open(openapi_file, 'r') as f:
+            content = f.read()
+            self.assertIn("openapi:", content)
+            self.assertIn("paths:", content)
+            self.assertIn("/process_feedback", content)
+    
+    def test_fastapi_serves_plugin_files(self):
+        """
+        Test Case 6.6.3: FastAPI serves ai-plugin.json and openapi.yaml endpoints
+        
+        Requirement 6.6: ChatGPT plugin support via HTTP endpoints
+        """
+        try:
+            from mcp.api import app
+            from fastapi.testclient import TestClient
+            
+            client = TestClient(app)
+            
+            # Test ai-plugin.json endpoint
+            response = client.get("/.well-known/ai-plugin.json")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["content-type"], "application/json")
+            plugin_data = response.json()
+            self.assertIn("name_for_human", plugin_data)
+            self.assertIn("api", plugin_data)
+            
+            # Test openapi.yaml endpoint
+            response = client.get("/openapi.yaml")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("text/yaml", response.headers["content-type"])
+            self.assertIn("openapi:", response.text)
+            self.assertIn("/process_feedback", response.text)
+            
+        except ImportError:
+            self.skipTest("FastAPI not installed - skipping FastAPI tests")
+
+
 if __name__ == '__main__':
     unittest.main()
 

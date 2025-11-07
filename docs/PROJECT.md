@@ -88,6 +88,10 @@ greys (list of str): A list of letters that are excluded (e.g., ['a', 'n', 't'])
 candidates (list of str): Possible candidate words.
 suggestions (list of dicts): Suggested words with associated scores, each dict containing "word" (str) and "score" (int) keys.
 - 6.5.3: APPROVED, MVP – The FastAPI application shall be runnable as a standalone server and integrate with MCP tool infrastructure that communicates over HTTP.
+- 6.6: APPROVED, MVP – Support for ChatGPT plugins via MCP requires creating proper .well-known/ai-plugin.json and openapi.yaml files for ChatGPT
+- 6.6.1: APPROVED, MVP – System shall provide .well-known/ai-plugin.json manifest file with plugin metadata
+- 6.6.2: APPROVED, MVP – System shall provide openapi.yaml file describing the API endpoints
+- 6.6.3: APPROVED, MVP – FastAPI server shall serve both files via HTTP endpoints for ChatGPT discovery
 
 ### Architectural Decision Records (Technical PM Role)
 

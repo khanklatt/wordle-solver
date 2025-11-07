@@ -1,0 +1,152 @@
+openapi: 3.0.0
+info:
+  title: Wordle Solver API
+  description: HTTP API for Wordle Solver MCP Tool - Helps solve Wordle puzzles by analyzing letter frequencies and filtering candidate words
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+paths:
+  /process_feedback:
+    post:
+      operationId: process_feedback
+      summary: Process Wordle feedback and return candidates and suggestions
+      description: |
+        Processes Wordle game feedback (green/yellow/grey letters) and returns:
+        - Filtered candidate words that match the constraints
+        - Scored suggestions prioritized by vowel count and positional frequency
+        
+        Green letters indicate correct letter in correct position.
+        Yellow letters indicate correct letter in wrong position.
+        Grey letters indicate letters not in the word.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessFeedbackRequest'
+            example:
+              guess: "saint"
+              greens: "..i.."
+              yellows: "s...."
+              greys: ["a", "n", "t"]
+      responses:
+        '200':
+          description: Successful response with candidates and suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFeedbackResponse'
+              example:
+                candidates: ["guise", "poise", "noise"]
+                suggestions:
+                  - word: "GUISE"
+                    score: 19
+                  - word: "POISE"
+                    score: 20
+        '500':
+          description: Error processing feedback
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+
+  /health:
+    get:
+      operationId: health_check
+      summary: Health check endpoint
+      description: Returns API health status
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  service:
+                    type: string
+                    example: "wordle-solver-api"
+
+  /.well-known/ai-plugin.json:
+    get:
+      operationId: get_ai_plugin_json
+      summary: ChatGPT plugin manifest
+      description: Returns the ChatGPT plugin manifest file
+      responses:
+        '200':
+          description: Plugin manifest
+          content:
+            application/json:
+              schema:
+                type: object
+
+components:
+  schemas:
+    ProcessFeedbackRequest:
+      type: object
+      required:
+        - guess
+        - greens
+        - yellows
+        - greys
+      properties:
+        guess:
+          type: string
+          description: The guessed word (e.g., 'saint')
+          example: "saint"
+        greens:
+          type: string
+          description: Green letters feedback string with dots for unknown positions (e.g., '..i..')
+          example: "..i.."
+        yellows:
+          type: string
+          description: Yellow letters feedback string with dots (e.g., 's....')
+          example: "s...."
+        greys:
+          type: array
+          items:
+            type: string
+          description: List of excluded letters (e.g., ['a', 'n', 't'])
+          example: ["a", "n", "t"]
+
+    Suggestion:
+      type: object
+      required:
+        - word
+        - score
+      properties:
+        word:
+          type: string
+          description: Suggested word
+          example: "GUISE"
+        score:
+          type: integer
+          description: Word score (lower is better)
+          example: 19
+
+    ProcessFeedbackResponse:
+      type: object
+      required:
+        - candidates
+        - suggestions
+      properties:
+        candidates:
+          type: array
+          items:
+            type: string
+          description: List of candidate words
+          example: ["guise", "poise", "noise"]
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Suggestion'
+          description: List of suggested words with scores
+

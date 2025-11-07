@@ -17,14 +17,19 @@ from typing import List, Dict, Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field
 from wordle_solver import WordleSolver
 
 # Create FastAPI application
 app = FastAPI(
     title="Wordle Solver API",
-    description="HTTP API for Wordle Solver MCP Tool",
-    version="1.0.0"
+    description="HTTP API for Wordle Solver MCP Tool - Helps solve Wordle puzzles by analyzing letter frequencies and filtering candidate words",
+    version="1.0.0",
+    servers=[
+        {"url": "http://localhost:8000", "description": "Local development server"},
+    ]
 )
 
 # Create a single solver instance to reuse across requests
@@ -138,6 +143,68 @@ async def health_check() -> Dict[str, str]:
     return {"status": "healthy", "service": "wordle-solver-api"}
 
 
+@app.get("/.well-known/ai-plugin.json")
+async def get_ai_plugin_json() -> JSONResponse:
+    """
+    Serve ChatGPT plugin manifest file
+    
+    Requirement 6.6: Support for ChatGPT plugins via ai-plugin.json
+    
+    Returns:
+        ChatGPT plugin manifest JSON
+    """
+    # Get the project root directory
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    plugin_file = os.path.join(project_root, ".well-known", "ai-plugin.json")
+    
+    if os.path.exists(plugin_file):
+        import json
+        with open(plugin_file, 'r') as f:
+            plugin_data = json.load(f)
+        return JSONResponse(content=plugin_data)
+    else:
+        raise HTTPException(status_code=404, detail="Plugin manifest not found")
+
+
+@app.get("/openapi.yaml")
+async def get_openapi_yaml() -> Response:
+    """
+    Serve OpenAPI specification in YAML format
+    
+    Requirement 6.6: Support for ChatGPT plugins via openapi.yaml
+    
+    Returns:
+        OpenAPI specification file in YAML format
+    """
+    import os
+    
+    # Get the project root directory
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    openapi_file = os.path.join(project_root, "openapi.yaml")
+    
+    if os.path.exists(openapi_file):
+        return FileResponse(openapi_file, media_type="text/yaml")
+    else:
+        # Generate OpenAPI schema from FastAPI app
+        openapi_schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+        
+        # Convert to YAML format
+        try:
+            import yaml
+            yaml_content = yaml.dump(openapi_schema, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            return Response(content=yaml_content, media_type="text/yaml")
+        except ImportError:
+            # If yaml not available, return JSON (ChatGPT can handle JSON OpenAPI specs)
+            import json
+            json_content = json.dumps(openapi_schema, indent=2)
+            return Response(content=json_content, media_type="application/json")
+
+
 if __name__ == "__main__":
     """
     Requirement 6.5.3: Runnable as standalone server
@@ -152,7 +219,3 @@ if __name__ == "__main__":
         print("Error: uvicorn is required to run the server.")
         print("Install with: pip install uvicorn fastapi")
         sys.exit(1)
-
-# Add endpoints
-app.add_api_route("/process_feedback", process_feedback, methods=["POST"])
-app.add_api_route("/", health_check, methods=["GET"])
