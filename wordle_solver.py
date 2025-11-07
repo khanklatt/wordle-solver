@@ -1,8 +1,22 @@
 """
 Wordle Solver - Interactive CLI tool for solving Wordle puzzles
+
+This module provides an interactive command-line tool that helps users solve Wordle puzzles
+by analyzing letter frequencies and filtering candidate words based on user feedback.
+
+Example usage:
+    >>> solver = WordleSolver()
+    >>> solver.solve()
+
+The solver requires:
+    - Positional frequency files: /tmp/pos1.txt through /tmp/pos5.txt
+    - Valid word list: /tmp/wordle-words.txt
+
+See README.md for detailed setup and usage instructions.
 """
 import os
 import re
+from typing import Dict, Set, List, Tuple, Optional, Callable
 
 
 class WordleSolver:
@@ -10,38 +24,57 @@ class WordleSolver:
     Main Wordle Solver class
     Loads positional letter frequencies and valid words to suggest guesses
     """
+    # Constants
+    WORD_LENGTH = 5
+    PENALTY_SCORE = 1000
+    WORDS_PER_LINE = 10
+    MAX_LETTERS_IN_ALPHABET = 26
+    VOWELS = set('aeiou')
     
-    def __init__(self, frequency_dir='/tmp', words_file='/tmp/wordle-words.txt'):
+    def __init__(self, frequency_dir: str = '/tmp', words_file: str = '/tmp/wordle-words.txt'):
         """
         Initialize Wordle Solver
         
         Requirement 1.1: Load positional letter frequency files from /tmp/pos1.txt through /tmp/pos5.txt
         Requirement 1.3: Load valid Wordle words from /tmp/wordle-words.txt
+        
+        Args:
+            frequency_dir: Directory containing positional frequency files (default: /tmp)
+            words_file: Path to file containing valid Wordle words (default: /tmp/wordle-words.txt)
+        
+        Raises:
+            IOError: If files cannot be read (with clear error message)
         """
-        self.positional_frequencies = {}
-        self.valid_words = set()
+        self.positional_frequencies: Dict[int, str] = {}
+        self.valid_words: Set[str] = set()
         
         # Load frequency files for positions 1-5
-        for pos in range(1, 6):
+        for pos in range(1, self.WORD_LENGTH + 1):
             filepath = os.path.join(frequency_dir, f'pos{pos}.txt')
             if os.path.exists(filepath):
-                with open(filepath, 'r') as f:
-                    # Store the file content for now (will extract top-N in req 1.2)
-                    self.positional_frequencies[pos] = f.read()
+                try:
+                    with open(filepath, 'r') as f:
+                        # Store the file content for now (will extract top-N in req 1.2)
+                        self.positional_frequencies[pos] = f.read()
+                except IOError as e:
+                    raise IOError(f"Failed to load frequency file {filepath}: {e}") from e
         
         # Load valid Wordle words
         if os.path.exists(words_file):
-            with open(words_file, 'r') as f:
-                # Store words as lowercase set for efficient lookup
-                self.valid_words = {line.strip().lower() for line in f if line.strip()}
+            try:
+                with open(words_file, 'r') as f:
+                    # Store words as lowercase set for efficient lookup
+                    self.valid_words = {line.strip().lower() for line in f if line.strip()}
+            except IOError as e:
+                raise IOError(f"Failed to load word list {words_file}: {e}") from e
         
         # Requirement 5.2: Maintain minimal state (only green/yellow/grey constraints and candidate words)
-        self.green_constraints = {}  # position -> letter mapping
-        self.yellow_constraints = {}  # letter -> set of excluded positions
-        self.grey_constraints = set()  # set of excluded letters
-        self.candidate_words = set()  # filtered candidate words
+        self.green_constraints: Dict[int, str] = {}  # position -> letter mapping
+        self.yellow_constraints: Dict[str, Set[int]] = {}  # letter -> set of excluded positions
+        self.grey_constraints: Set[str] = set()  # set of excluded letters
+        self.candidate_words: Set[str] = set()  # filtered candidate words
     
-    def extract_top_letters(self, position, n):
+    def extract_top_letters(self, position: int, n: int) -> List[str]:
         """
         Extract top-N letters per position from frequency files
         
@@ -78,7 +111,7 @@ class WordleSolver:
         # Return top N letters
         return letters[:n]
     
-    def get_letter_line_number(self, position, letter):
+    def get_letter_line_number(self, position: int, letter: str) -> Optional[int]:
         """
         Get the line number (1-indexed) where a letter appears in a positional frequency file
         
@@ -112,29 +145,33 @@ class WordleSolver:
         
         return None
     
-    def compute_word_scores(self):
+    def compute_word_scores(self, candidate_words: Optional[Set[str]] = None) -> List[Tuple[str, int]]:
         """
         Compute word score for each candidate word based on positional frequency line numbers
         
         Requirement 3.5: Compute word score - lower score is better
         Score is sum of line numbers where letters appear in frequency files for unknown positions
         
+        Args:
+            candidate_words: Optional set of words to score. If None, uses self.candidate_words.
+        
         Returns:
             List of (word, score) tuples sorted by score (lowest first)
         """
-        if not self.candidate_words:
+        words = candidate_words if candidate_words is not None else self.candidate_words
+        if not words:
             return []
         
         # Find unknown positions (positions not in green_constraints)
-        unknown_positions = [pos for pos in range(1, 6) if pos not in self.green_constraints]
+        unknown_positions = [pos for pos in range(1, self.WORD_LENGTH + 1) if pos not in self.green_constraints]
         
         if not unknown_positions:
             # All positions are known, return words with score 0
-            return [(word, 0) for word in sorted(self.candidate_words)]
+            return [(word, 0) for word in sorted(words)]
         
         scored_words = []
         
-        for word in self.candidate_words:
+        for word in words:
             score = 0
             for pos in unknown_positions:
                 letter = word[pos - 1].lower()  # Get letter at this position (0-indexed: pos-1)
@@ -143,7 +180,7 @@ class WordleSolver:
                     score += line_num
                 else:
                     # Letter not found in frequency file - assign high penalty score
-                    score += 1000
+                    score += self.PENALTY_SCORE
             
             scored_words.append((word, score))
         
@@ -152,7 +189,7 @@ class WordleSolver:
         
         return scored_words
     
-    def get_words_with_most_vowels(self):
+    def get_words_with_most_vowels(self) -> Set[str]:
         """
         Get words with the most vowels from candidate words
         
@@ -164,12 +201,11 @@ class WordleSolver:
         if not self.candidate_words:
             return set()
         
-        vowels = set('aeiou')
         max_vowel_count = 0
         vowel_words = set()
         
         for word in self.candidate_words:
-            vowel_count = sum(1 for char in word.lower() if char in vowels)
+            vowel_count = sum(1 for char in word.lower() if char in self.VOWELS)
             if vowel_count > max_vowel_count:
                 max_vowel_count = vowel_count
                 vowel_words = {word}
@@ -178,7 +214,7 @@ class WordleSolver:
         
         return vowel_words
     
-    def get_suggested_next_guess(self):
+    def get_suggested_next_guess(self) -> Optional[List[Tuple[str, int]]]:
         """
         Get suggested next guess using vowel prioritization and positional frequency scoring
         
@@ -200,11 +236,8 @@ class WordleSolver:
             vowel_words = self.candidate_words
         
         # Requirement 3.5: Score the vowel-rich words
-        # Temporarily set candidate_words to vowel_words for scoring
-        original_candidates = self.candidate_words
-        self.candidate_words = vowel_words
-        scored_words = self.compute_word_scores()
-        self.candidate_words = original_candidates
+        # Pass vowel_words as parameter instead of mutating state
+        scored_words = self.compute_word_scores(candidate_words=vowel_words)
         
         if scored_words:
             # Requirement 3.5.1: Return all scored words
@@ -213,7 +246,7 @@ class WordleSolver:
         # Fallback: create scored list from vowel words with score 0
         return [(word, 0) for word in sorted(vowel_words)]
     
-    def get_default_first_guess(self):
+    def get_default_first_guess(self) -> str:
         """
         Get default first guess suggestion
         
@@ -224,7 +257,7 @@ class WordleSolver:
         """
         return 'SAINT'
     
-    def prompt_for_guess(self):
+    def prompt_for_guess(self) -> str:
         """
         Prompt user for guess input (case insensitive)
         
@@ -239,7 +272,7 @@ class WordleSolver:
         # Convert to uppercase (case insensitive per requirement 2.1)
         return user_input.upper()
     
-    def prompt_for_green_letters(self):
+    def prompt_for_green_letters(self) -> str:
         """
         Prompt user for green letters feedback
         
@@ -252,7 +285,7 @@ class WordleSolver:
         user_input = input("Enter green letters feedback (use dots for unknown positions, e.g., 'S..NT'): ").strip()
         return user_input.upper()
     
-    def convert_green_letters(self, green_string):
+    def convert_green_letters(self, green_string: str) -> Dict[int, str]:
         """
         Convert green letters string into position-to-letter mapping dictionary
         
@@ -270,7 +303,7 @@ class WordleSolver:
                 mapping[i] = char.upper()
         return mapping
     
-    def prompt_for_yellow_letters(self):
+    def prompt_for_yellow_letters(self) -> str:
         """
         Prompt user for yellow letters input
         
@@ -283,7 +316,7 @@ class WordleSolver:
         user_input = input("Enter yellow letters feedback (use dots for positions, e.g., '.A...'): ").strip()
         return user_input.upper()
     
-    def convert_yellow_letters(self, yellow_string):
+    def convert_yellow_letters(self, yellow_string: str) -> Dict[str, Set[int]]:
         """
         Convert yellow letters into letter-to-excluded-positions mapping dictionary
         
@@ -304,7 +337,7 @@ class WordleSolver:
                 mapping[letter].add(i)
         return mapping
     
-    def prompt_for_grey_letters(self):
+    def prompt_for_grey_letters(self) -> str:
         """
         Accept grey letters input as space-separated letters
         
@@ -317,7 +350,37 @@ class WordleSolver:
         user_input = input("Enter grey letters (space-separated, e.g., 'E R T'): ").strip()
         return user_input.upper()
     
-    def convert_grey_letters(self, grey_string):
+    def validate_grey_letters(self, grey_string: str) -> Tuple[bool, str]:
+        """
+        Validate grey letters input format
+        
+        Requirement 5.4: Handle invalid input gracefully with appropriate error messages
+        
+        Args:
+            grey_string: Grey letters input string (space-separated)
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not grey_string:
+            return True, ""  # Empty is valid (no grey letters)
+        
+        # Check that all characters are letters or spaces
+        for char in grey_string:
+            if not (char.isalpha() or char.isspace()):
+                return False, "Error: Grey letters must contain only letters and spaces."
+        
+        # Check that letters are single characters (not words)
+        letters = grey_string.split()
+        for letter in letters:
+            if len(letter) != 1:
+                return False, f"Error: Each grey letter must be a single character (got '{letter}')."
+            if not letter.isalpha():
+                return False, f"Error: Grey letters must be alphabetic (got '{letter}')."
+        
+        return True, ""
+    
+    def convert_grey_letters(self, grey_string: str) -> Set[str]:
         """
         Convert grey letters into set of excluded letters
         
@@ -333,7 +396,7 @@ class WordleSolver:
             return set()
         return {letter.upper() for letter in grey_string.split() if letter.strip()}
     
-    def split_candidates_by_letter_uniqueness(self):
+    def split_candidates_by_letter_uniqueness(self) -> Tuple[Set[str], Set[str]]:
         """
         Split candidate words into unique letters and repeated letters sections
         
@@ -357,7 +420,7 @@ class WordleSolver:
         
         return unique_words, repeated_words
     
-    def display_candidates(self):
+    def display_candidates(self) -> None:
         """
         Display filtered candidate words after each constraint application
         
@@ -379,21 +442,19 @@ class WordleSolver:
         if unique_words:
             print(f"\nSection 1 - Unique letters ({len(unique_words)} word(s)):")
             sorted_unique = sorted(unique_words)
-            words_per_line = 10
-            for i in range(0, len(sorted_unique), words_per_line):
-                line_words = sorted_unique[i:i+words_per_line]
+            for i in range(0, len(sorted_unique), self.WORDS_PER_LINE):
+                line_words = sorted_unique[i:i+self.WORDS_PER_LINE]
                 print("  " + " ".join(word.upper() for word in line_words))
         
         # Section 2: Words with repeated letters
         if repeated_words:
             print(f"\nSection 2 - Repeated letters ({len(repeated_words)} word(s)):")
             sorted_repeated = sorted(repeated_words)
-            words_per_line = 10
-            for i in range(0, len(sorted_repeated), words_per_line):
-                line_words = sorted_repeated[i:i+words_per_line]
+            for i in range(0, len(sorted_repeated), self.WORDS_PER_LINE):
+                line_words = sorted_repeated[i:i+self.WORDS_PER_LINE]
                 print("  " + " ".join(word.upper() for word in line_words))
     
-    def display_suggested_guess(self, scored_words):
+    def display_suggested_guess(self, scored_words: Optional[List[Tuple[str, int]]] = None) -> None:
         """
         Display suggested next guess after all constraints are applied
         
@@ -419,7 +480,7 @@ class WordleSolver:
             # Empty list, fallback to default
             print(f"\nSuggested next guess: {self.get_default_first_guess()}")
     
-    def validate_guess(self, guess):
+    def validate_guess(self, guess: str) -> Tuple[bool, str]:
         """
         Validate guess input
         
@@ -433,13 +494,13 @@ class WordleSolver:
         """
         if not guess:
             return False, "Error: Guess cannot be empty."
-        if len(guess) != 5:
-            return False, f"Error: Guess must be exactly 5 letters (got {len(guess)})."
+        if len(guess) != self.WORD_LENGTH:
+            return False, f"Error: Guess must be exactly {self.WORD_LENGTH} letters (got {len(guess)})."
         if not guess.isalpha():
             return False, "Error: Guess must contain only letters."
         return True, ""
     
-    def validate_green_letters(self, green_string):
+    def validate_green_letters(self, green_string: str) -> Tuple[bool, str]:
         """
         Validate green letters input format
         
@@ -453,13 +514,13 @@ class WordleSolver:
         """
         if not green_string:
             return False, "Error: Green letters feedback cannot be empty."
-        if len(green_string) != 5:
-            return False, f"Error: Green letters must be exactly 5 characters (got {len(green_string)})."
+        if len(green_string) != self.WORD_LENGTH:
+            return False, f"Error: Green letters must be exactly {self.WORD_LENGTH} characters (got {len(green_string)})."
         if not all(c.isalpha() or c == '.' for c in green_string):
             return False, "Error: Green letters must contain only letters and dots."
         return True, ""
     
-    def validate_yellow_letters(self, yellow_string):
+    def validate_yellow_letters(self, yellow_string: str) -> Tuple[bool, str]:
         """
         Validate yellow letters input format
         
@@ -473,13 +534,49 @@ class WordleSolver:
         """
         if not yellow_string:
             return True, ""  # Empty is valid (no yellow letters)
-        if len(yellow_string) != 5:
-            return False, f"Error: Yellow letters must be exactly 5 characters (got {len(yellow_string)})."
+        if len(yellow_string) != self.WORD_LENGTH:
+            return False, f"Error: Yellow letters must be exactly {self.WORD_LENGTH} characters (got {len(yellow_string)})."
         if not all(c.isalpha() or c == '.' for c in yellow_string):
             return False, "Error: Yellow letters must contain only letters and dots."
         return True, ""
     
-    def solve(self):
+    def _prompt_with_validation(
+        self,
+        prompt_func: Callable[[], str],
+        validate_func: Callable[[str], Tuple[bool, str]],
+        convert_func: Optional[Callable[[str], str]] = None
+    ) -> Optional[str]:
+        """
+        Generic prompt loop with validation and quit handling
+        
+        Args:
+            prompt_func: Function that prompts user and returns input string
+            validate_func: Function that validates input and returns (is_valid, error_msg)
+            convert_func: Optional function to convert input (default: uppercase)
+        
+        Returns:
+            Validated and converted input string, or None if user quits
+        """
+        while True:
+            try:
+                user_input = prompt_func()
+                if user_input.upper() == 'QUIT':
+                    print("Exiting Wordle Solver. Goodbye!")
+                    return None
+                
+                is_valid, error_msg = validate_func(user_input)
+                if is_valid:
+                    if convert_func:
+                        return convert_func(user_input)
+                    return user_input.upper()
+                else:
+                    print(error_msg)
+                    print("Please try again.")
+            except KeyboardInterrupt:
+                print("\n\nExiting Wordle Solver. Goodbye!")
+                return None
+    
+    def solve(self) -> bool:
         """
         Main interactive loop for solving Wordle puzzle
         
@@ -503,86 +600,47 @@ class WordleSolver:
             print(f"\n--- Round {round_num} ---")
             
             # Requirement 4.1: Prompt for guess
-            guess = None
-            while guess is None:
-                try:
-                    user_input = self.prompt_for_guess()
-                    if user_input.upper() == 'QUIT':
-                        print("Exiting Wordle Solver. Goodbye!")
-                        return False
-                    
-                    is_valid, error_msg = self.validate_guess(user_input)
-                    if is_valid:
-                        guess = user_input.upper()
-                    else:
-                        print(error_msg)
-                        print("Please try again.")
-                except KeyboardInterrupt:
-                    print("\n\nExiting Wordle Solver. Goodbye!")
-                    return False
+            guess = self._prompt_with_validation(
+                self.prompt_for_guess,
+                self.validate_guess
+            )
+            if guess is None:
+                return False
             
             # Requirement 4.2: Prompt for green letters
-            green_feedback = None
-            while green_feedback is None:
-                try:
-                    user_input = self.prompt_for_green_letters()
-                    if user_input.upper() == 'QUIT':
-                        print("Exiting Wordle Solver. Goodbye!")
-                        return False
-                    
-                    is_valid, error_msg = self.validate_green_letters(user_input)
-                    if is_valid:
-                        green_feedback = user_input.upper()
-                    else:
-                        print(error_msg)
-                        print("Please try again.")
-                except KeyboardInterrupt:
-                    print("\n\nExiting Wordle Solver. Goodbye!")
-                    return False
+            green_feedback = self._prompt_with_validation(
+                self.prompt_for_green_letters,
+                self.validate_green_letters
+            )
+            if green_feedback is None:
+                return False
             
             # Update green constraints
             self.green_constraints = self.convert_green_letters(green_feedback)
             
-            # Check if puzzle is solved (all 5 positions are green)
-            if len(self.green_constraints) == 5:
+            # Check if puzzle is solved (all positions are green)
+            if len(self.green_constraints) == self.WORD_LENGTH:
                 print("\n🎉 Congratulations! Puzzle solved!")
                 return True
             
             # Requirement 4.3: Prompt for yellow letters
-            yellow_feedback = None
-            while yellow_feedback is None:
-                try:
-                    user_input = self.prompt_for_yellow_letters()
-                    if user_input.upper() == 'QUIT':
-                        print("Exiting Wordle Solver. Goodbye!")
-                        return False
-                    
-                    is_valid, error_msg = self.validate_yellow_letters(user_input)
-                    if is_valid:
-                        yellow_feedback = user_input.upper()
-                    else:
-                        print(error_msg)
-                        print("Please try again.")
-                except KeyboardInterrupt:
-                    print("\n\nExiting Wordle Solver. Goodbye!")
-                    return False
+            yellow_feedback = self._prompt_with_validation(
+                self.prompt_for_yellow_letters,
+                self.validate_yellow_letters
+            )
+            if yellow_feedback is None:
+                return False
             
             # Update yellow constraints
             self.yellow_constraints = self.convert_yellow_letters(yellow_feedback)
             
             # Requirement 4.4: Prompt for grey letters
-            grey_input = None
-            while grey_input is None:
-                try:
-                    user_input = self.prompt_for_grey_letters()
-                    if user_input.upper() == 'QUIT':
-                        print("Exiting Wordle Solver. Goodbye!")
-                        return False
-                    
-                    grey_input = user_input.upper()
-                except KeyboardInterrupt:
-                    print("\n\nExiting Wordle Solver. Goodbye!")
-                    return False
+            grey_input = self._prompt_with_validation(
+                self.prompt_for_grey_letters,
+                self.validate_grey_letters
+            )
+            if grey_input is None:
+                return False
             
             # Update grey constraints
             self.grey_constraints.update(self.convert_grey_letters(grey_input))
@@ -601,7 +659,7 @@ class WordleSolver:
             
             round_num += 1
     
-    def filter_candidates(self):
+    def filter_candidates(self) -> None:
         """
         Filter candidate words using regex-based constraints
         
@@ -625,7 +683,7 @@ class WordleSolver:
             candidates = {w for w in candidates if not re.search(grey_pattern, w, re.IGNORECASE)}
         
         # Requirement 3.1.1: Green letters - build regex pattern for fixed positions
-        regex_pattern = [''] * 5  # Initialize pattern for 5 positions
+        regex_pattern = [''] * self.WORD_LENGTH  # Initialize pattern for all positions
         for pos, letter in self.green_constraints.items():
             regex_pattern[pos - 1] = letter.lower()  # Convert to lowercase for matching
         
@@ -640,18 +698,21 @@ class WordleSolver:
                     if regex_pattern[pos - 1] == '':
                         regex_pattern[pos - 1] = f'[^{letter.lower()}]'
                     else:
-                        # If already has a pattern, ensure letter is excluded
-                        regex_pattern[pos - 1] = regex_pattern[pos - 1].replace(letter.lower(), '')
+                        # If already has a pattern, rebuild character class to exclude letter
+                        if regex_pattern[pos - 1].startswith('[^'):
+                            # Extract existing exclusions and add new one
+                            existing = regex_pattern[pos - 1][2:-1]  # Remove [^ and ]
+                            if letter.lower() not in existing:
+                                regex_pattern[pos - 1] = f'[^{existing}{letter.lower()}]'
+                        else:
+                            # Create new exclusion pattern
+                            regex_pattern[pos - 1] = f'[^{letter.lower()}]'
         
         # Build final regex pattern
-        for i in range(5):
+        for i in range(self.WORD_LENGTH):
             if regex_pattern[i] == '':
-                # Position not fixed - include yellow letters if any, otherwise any letter
-                if yellow_letters_to_include:
-                    # Must include at least one yellow letter somewhere, but not in excluded positions
-                    regex_pattern[i] = '[a-z]'
-                else:
-                    regex_pattern[i] = '[a-z]'
+                # Position not fixed - allow any letter
+                regex_pattern[i] = '[a-z]'
         
         # Apply regex filtering
         pattern = '^' + ''.join(regex_pattern) + '$'
@@ -673,7 +734,7 @@ class WordleSolver:
         if not self.candidate_words:
             self.expand_candidates_when_empty()
     
-    def expand_candidates_when_empty(self):
+    def expand_candidates_when_empty(self) -> None:
         """
         Iteratively expand top-N letter set when candidate set becomes empty
         
@@ -692,14 +753,14 @@ class WordleSolver:
         if not self.candidate_words and self.valid_words:
             # Find unfixed positions (positions not in green_constraints)
             fixed_positions = set(self.green_constraints.keys())
-            unfixed_positions = [pos for pos in range(1, 6) if pos not in fixed_positions]
+            unfixed_positions = [pos for pos in range(1, self.WORD_LENGTH + 1) if pos not in fixed_positions]
             
             if not unfixed_positions:
                 # All positions are fixed, no expansion needed
                 return
             
             # Start with a base pattern from green constraints
-            base_word = [''] * 5
+            base_word = [''] * self.WORD_LENGTH
             for pos, letter in self.green_constraints.items():
                 base_word[pos - 1] = letter.lower()
             
@@ -711,7 +772,7 @@ class WordleSolver:
             position_letters = {}
             for pos in unfixed_positions:
                 # Get all letters from frequency file for this position (up to reasonable limit)
-                letters = self.extract_top_letters(pos, n=26)  # Get all letters if available
+                letters = self.extract_top_letters(pos, n=self.MAX_LETTERS_IN_ALPHABET)
                 # Filter out grey letters
                 filtered_letters = [l for l in letters if l.upper() not in self.grey_constraints]
                 position_letters[pos] = filtered_letters
