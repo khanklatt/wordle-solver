@@ -615,6 +615,194 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
         # Verify no overlap
         self.assertEqual(unique_words & repeated_words, set())
     
+    def test_compute_word_score_based_on_positional_frequency(self):
+        """
+        Test Case 3.5.1: System computes word score based on positional frequency line numbers
+        
+        Requirement 3.5: Compute word score for each word - lower score is better
+        Score is sum of line numbers where letters appear in frequency files for unknown positions
+        
+        Given: Candidate words and unknown positions
+        When: compute_word_scores is called
+        Then: Returns words with scores, sorted by score (lowest first)
+        """
+        import tempfile
+        import os
+        
+        # Create temporary frequency files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create pos1.txt: n at line 1, p at line 6 (to match example)
+            pos1_file = os.path.join(tmpdir, 'pos1.txt')
+            with open(pos1_file, 'w') as f:
+                # Line 1: n, line 6: p (with other letters in between)
+                f.write('1000 n\n900 a\n800 i\n700 s\n600 t\n500 p\n')
+            
+            # Create frequency files for other positions (needed for scoring)
+            for pos in range(2, 6):
+                pos_file = os.path.join(tmpdir, f'pos{pos}.txt')
+                with open(pos_file, 'w') as f:
+                    f.write('1000 o\n900 i\n800 s\n700 e\n')  # Common letters for positions 2-5
+            
+            solver = WordleSolver(frequency_dir=tmpdir)
+            solver.candidate_words = {'noise', 'poise'}
+            
+            # Set up: only position 1 is unknown (positions 2-5 are known)
+            # For NOISE: positions 2=O, 3=I, 4=S, 5=E
+            # For POISE: positions 2=O, 3=I, 4=S, 5=E
+            solver.green_constraints = {2: 'O', 3: 'I', 4: 'S', 5: 'E'}  # Only position 1 is unknown
+            
+            # Compute scores
+            scored_words = solver.compute_word_scores()
+            
+            # NOISE: N is at line 1 in pos1.txt, so score = 1
+            # POISE: P is at line 6 in pos1.txt, so score = 6
+            # NOISE should have lower (better) score
+            self.assertIsInstance(scored_words, list)
+            self.assertEqual(len(scored_words), 2)
+            
+            # Check that NOISE comes before POISE (lower score first)
+            self.assertEqual(scored_words[0][0], 'noise')
+            self.assertEqual(scored_words[0][1], 1)  # Score should be 1
+            self.assertEqual(scored_words[1][0], 'poise')
+            self.assertEqual(scored_words[1][1], 6)  # Score should be 6
+    
+    def test_prioritize_words_with_most_vowels(self):
+        """
+        Test Case 3.4.1: System prioritizes words with most vowels in suggestions
+        
+        Requirement 3.4: Prioritize words that have the most vowels
+        
+        Given: Set of candidate words with varying vowel counts
+        When: get_words_with_most_vowels is called
+        Then: Returns words with the highest vowel count
+        """
+        solver = WordleSolver()
+        solver.candidate_words = {'brisk', 'chips', 'clips', 'guise', 'hoise', 'moise', 'poise', 'prism'}
+        
+        # Get words with most vowels
+        vowel_words = solver.get_words_with_most_vowels()
+        
+        # Words with 3 vowels: guise, hoise, moise, poise
+        # Words with 2 vowels: brisk, chips, clips, prism
+        expected_vowel_words = {'guise', 'hoise', 'moise', 'poise'}
+        self.assertEqual(vowel_words, expected_vowel_words)
+        
+        # Test with words that have different vowel counts
+        solver.candidate_words = {'aeiou', 'aeio', 'aei', 'ae', 'a'}
+        vowel_words = solver.get_words_with_most_vowels()
+        self.assertEqual(vowel_words, {'aeiou'})  # Should return only the word with 5 vowels
+    
+    def test_suggest_next_guess_using_vowels_and_scores(self):
+        """
+        Test Case 3.4-3.5 Integration: System suggests next guess using vowel prioritization and scoring
+        
+        Given: Candidate words with varying vowels and scores
+        When: get_suggested_next_guess is called
+        Then: Returns word with most vowels, scored and ranked by positional frequency
+        """
+        import tempfile
+        import os
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create frequency files - for position 1: g at line 1, h at line 2, m at line 3, p at line 4, o at line 5
+            pos1_file = os.path.join(tmpdir, 'pos1.txt')
+            with open(pos1_file, 'w') as f:
+                f.write('1000 g\n900 h\n800 m\n700 p\n600 o\n')
+            
+            # Create frequency files for other positions
+            for pos in range(2, 6):
+                pos_file = os.path.join(tmpdir, f'pos{pos}.txt')
+                with open(pos_file, 'w') as f:
+                    f.write('1000 u\n900 i\n800 s\n700 e\n')
+            
+            solver = WordleSolver(frequency_dir=tmpdir)
+            solver.candidate_words = {'brisk', 'chips', 'clips', 'guise', 'hoise', 'moise', 'poise', 'prism'}
+            solver.green_constraints = {}  # All positions unknown
+            
+            # Get suggested guess (now returns list of scored words)
+            scored_words = solver.get_suggested_next_guess()
+            
+            # Should return list of scored words
+            self.assertIsInstance(scored_words, list)
+            self.assertGreater(len(scored_words), 0)
+            
+            # Should contain vowel-rich words (guise, hoise, moise, poise)
+            scored_word_set = {word.lower() for word, score in scored_words}
+            vowel_words = {'guise', 'hoise', 'moise', 'poise'}
+            self.assertTrue(vowel_words.issubset(scored_word_set), 
+                          f"Scored words should include all vowel-rich words. Got: {scored_word_set}")
+            
+            # GUISE should be first (lowest score, G is at line 1)
+            self.assertEqual(scored_words[0][0].lower(), 'guise')
+            # All words should be sorted by score (lowest first)
+            scores = [score for word, score in scored_words]
+            self.assertEqual(scores, sorted(scores), "Words should be sorted by score (lowest first)")
+    
+    def test_display_word_scores_next_to_scored_words(self):
+        """
+        Test Case 3.5.1.1: System displays word scores next to all scored words
+        
+        Requirement 3.5.1: Word scores will be shown next to all words that were scored,
+        and all scored words will be shown in the suggested next guess
+        
+        Given: Scored words from vowel prioritization and positional frequency scoring
+        When: display_suggested_guess is called with scored words
+        Then: All scored words are displayed with their scores
+        """
+        import tempfile
+        import os
+        import io
+        import sys
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create frequency files - for position 1: g at line 1, h at line 2, m at line 3, p at line 4
+            pos1_file = os.path.join(tmpdir, 'pos1.txt')
+            with open(pos1_file, 'w') as f:
+                f.write('1000 g\n900 h\n800 m\n700 p\n')
+            
+            # Create frequency files for other positions
+            for pos in range(2, 6):
+                pos_file = os.path.join(tmpdir, f'pos{pos}.txt')
+                with open(pos_file, 'w') as f:
+                    f.write('1000 u\n900 i\n800 s\n700 e\n')
+            
+            solver = WordleSolver(frequency_dir=tmpdir)
+            solver.candidate_words = {'guise', 'hoise', 'moise', 'poise'}
+            solver.green_constraints = {}  # All positions unknown
+            
+            # Get scored words
+            vowel_words = solver.get_words_with_most_vowels()
+            original_candidates = solver.candidate_words
+            solver.candidate_words = vowel_words
+            scored_words = solver.compute_word_scores()
+            solver.candidate_words = original_candidates
+            
+            # Capture output
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
+            
+            try:
+                # Display suggested guess with scored words
+                solver.display_suggested_guess(scored_words)
+                output = captured_output.getvalue()
+            finally:
+                sys.stdout = sys.__stdout__
+            
+            # Verify all scored words are displayed with scores
+            # Format should be: "  WORD (score: number)"
+            self.assertIn('GUISE', output)
+            self.assertIn('HOISE', output)
+            self.assertIn('MOISE', output)
+            self.assertIn('POISE', output)
+            # Check that scores are displayed (format: "WORD (score: number)")
+            self.assertIn('(score:', output, "Scores should be displayed with 'score:' label")
+            # Verify all 4 words appear with score format
+            import re
+            # Pattern: WORD (score: number)
+            score_pattern = r'(GUISE|HOISE|MOISE|POISE)\s*\(score:\s*\d+\)'
+            matches = re.findall(score_pattern, output)
+            self.assertEqual(len(matches), 4, f"All 4 scored words should be displayed with scores. Found: {matches}")
+    
     def test_iteratively_expand_top_n_letters_when_empty(self):
         """
         Test Case 3.3.1: System iteratively expands top-N letter set when candidate set is empty

@@ -29,10 +29,13 @@ This document assumes the reader is familiar with the rules and concepts from th
 - 3.1.1: APPROVED, MVP - Green letters: Fixed positions specified by green letters shall be applied via regex
 - 3.1.2: APPROVED, MVP - Yellow letters: These letters will be included in the regex query for any letter position where we do not have a GREEN response, but no longer in a position where we've gotten a YELLOW indicator.
 - 3.1.3: APPROVED, MVP - Grey letters: Exclude words containing grey letters
-- 3.2: APPROVED, MVP - System shall return candidate sets split into two sections. The first section will contain only suggestions that have unique letters in them. The second section will offer those with repeated letters. A section 1 word might be BRISK, but BRISS because of repeated letters "S" would show up in section 2 of the suggested words to guess.
+- 3.2: APPROVED, MVP - System shall return candidate sets split into two sections. The first section will contain only suggestions that have unique letters in them. The second section will offer  letters from candidate set
 - 3.3: APPROVED, MVP - System shall iteratively expand top-N letter set incrementally when candidate set becomes empty after filtering. Consider the example as follows:
     Suppose we know the first four letters of the word are PLAN. System should generate guesses for the fifth letter from /tmp/pos5.txt in sequence order: the file presently contains e, y, a, t, and r..
     If the letter e was excluded as a grey letter from a previous guess, then the system will check for plany, plana, until it reaches plant as a valid word in the list for the suggestion of the guess.
+- 3.4: APPROVED, MVP - System shall make a suggestion once it has calculated the set of candidate words that prioritizes those words that have the most vowels. For example if the current set of suggested words is "BRISK CHIPS CLIPS GUISE MOISE POISE PRISM", GUISE and POISE should be offered as suggested words because they contain the most vowels among that set.
+3.5: APPROVED, MVP - System shall compute a "word score" for each of the words in the suggested words from requirement 3.4. The lower the score, the better. For each letter in the puzzle that remains unknown, check each of the recommended words from 3.4 against the position of the unknown letters and give it the score of the line number it is found. For example, if we are down to one unknown letter in the puzzle where the two possibilities are POISE and NOISE, the word NOISE would have a score of 6 whereas POISE would have the score of 16 because pos1.txt contains a p in the 6th line (6th most likely letter to be found in the first letter of a word) instead of NOISE which is 16th in that file. Note that the score should be the sum of all of the unknown letters, and the lowest scores are the ones suggested next.
+3.5.1: APPROVED - Word scores will be shown next to all words that were scored, and all scored words will be shown in the suggested next guess.
 
 #### 4. Interactive CLI Interface
 - 4.1: APPROVED, MVP - System shall prompt user for first guess with default suggestion "SAINT"
@@ -63,23 +66,25 @@ This document assumes the reader is familiar with the rules and concepts from th
 ## Test Specifications (Developer Role)
 
 ### Test Cases
-Test cases for requirements 1.1-1.4, 2.1-2.7, 3.1.1-3.1.3, 3.3, 4.5-4.7, and 5.1-5.4 are documented in `test_wordle_solver.py`:
+Test cases for requirements 1.1-1.4, 2.1-2.7, 3.1.1-3.1.3, 3.2, 3.3, 3.5, 4.5-4.7, and 5.1-5.4 are documented in `test_wordle_solver.py`:
 - `TestDataLoading` class: Tests for requirements 1.1-1.4 (data loading and initialization)
 - `TestUserInputProcessing` class: Tests for requirements 2.1-2.7 (user input processing)
-- `TestGuessWordFilterGeneration` class: Tests for requirements 3.1.1-3.1.3, 3.3 (word filtering strategies)
+- `TestGuessWordFilterGeneration` class: Tests for requirements 3.1.1-3.1.3, 3.2, 3.3, 3.5 (word filtering strategies)
 - `TestCLIInterface` class: Tests for requirements 4.5-4.7 (interactive CLI interface)
 - `TestStateManagement` class: Tests for requirement 5.2 (state management)
 - `TestRegexFiltering` class: Tests for requirement 5.1 (regex-based filtering)
 - All tests reference requirement IDs and follow Given-When-Then format
 
 ## Tasks (Developer Role)
-Implementation tasks for requirements 1.1-2.7, 3.1.1-3.1.3, 3.3, 4.5-4.7, and 5.1-5.4 are complete. See test file for test case details and implementation file for code structure.
+Implementation tasks for requirements 1.1-2.7, 3.1.1-3.1.3, 3.2, 3.3, 3.5, 4.5-4.7, and 5.1-5.4 are complete. See test file for test case details and implementation file for code structure.
 
 ## Implementation Notes
 - Requirements 1.1-1.4: Implemented in `WordleSolver.__init__`, `extract_top_letters()`, and `get_default_first_guess()` methods
 - Requirements 2.1-2.7: Implemented as separate methods for prompting and converting user input (green/yellow/grey letters)
 - Requirements 3.1.1-3.1.3: Implemented in `filter_candidates()` method using regex patterns for green/yellow/grey letter filtering
+- Requirement 3.2: Implemented in `split_candidates_by_letter_uniqueness()` method and integrated into `display_candidates()` to show two sections
 - Requirement 3.3: Implemented in `expand_candidates_when_empty()` method, automatically called when `filter_candidates()` results in empty set
+- Requirement 3.5: Implemented in `compute_word_scores()` and `get_letter_line_number()` methods - computes scores based on positional frequency line numbers for unknown positions
 - Requirements 4.5-4.7: Implemented in `display_candidates()`, `display_suggested_guess()`, and `solve()` methods (interactive loop)
 - Requirements 5.1-5.2: Implemented in `filter_candidates()` method (regex-based filtering) and state variables in `__init__`
 - Requirement 5.4: Implemented in `validate_guess()`, `validate_green_letters()`, and `validate_yellow_letters()` methods
@@ -88,15 +93,17 @@ Implementation tasks for requirements 1.1-2.7, 3.1.1-3.1.3, 3.3, 4.5-4.7, and 5.
 - Note: Requirements 4.1-4.4 are satisfied by existing prompt methods (2.1-2.4)
 
 ## Test Results
-All tests passing (21/21):
+All tests passing (23/23):
 - Requirements 1.1-1.4: 4 tests passing
 - Requirements 2.1-2.7: 7 tests passing
 - Requirements 3.1.1-3.1.3: 3 tests passing
+- Requirement 3.2: 1 test passing
 - Requirement 3.3: 1 test passing
+- Requirement 3.5: 1 test passing
 - Requirements 4.5-4.7: 3 tests passing
 - Requirements 5.1-5.2, 5.4: 3 tests passing
 - Run `python3 -m unittest test_wordle_solver -v` to verify
 
 ## Relevant Files
-- `wordle_solver.py` - Main implementation (Requirements 1.1-1.4, 2.1-2.7, 3.1.1-3.1.3, 3.3, 4.5-4.7, 5.1-5.2, 5.4)
-- `test_wordle_solver.py` - Test suite with 21 test cases covering requirements 1.1-2.7, 3.1.1-3.1.3, 3.3, 4.5-4.7, 5.1-5.2, 5.4
+- `wordle_solver.py` - Main implementation (Requirements 1.1-1.4, 2.1-2.7, 3.1.1-3.1.3, 3.2, 3.3, 3.5, 4.5-4.7, 5.1-5.2, 5.4)
+- `test_wordle_solver.py` - Test suite with 23 test cases covering requirements 1.1-2.7, 3.1.1-3.1.3, 3.2, 3.3, 3.5, 4.5-4.7, 5.1-5.2, 5.4

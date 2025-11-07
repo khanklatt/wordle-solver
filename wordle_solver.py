@@ -78,6 +78,141 @@ class WordleSolver:
         # Return top N letters
         return letters[:n]
     
+    def get_letter_line_number(self, position, letter):
+        """
+        Get the line number (1-indexed) where a letter appears in a positional frequency file
+        
+        Args:
+            position: Position number (1-5)
+            letter: Letter to find (case insensitive)
+            
+        Returns:
+            Line number (1-indexed) where letter appears, or None if not found
+        """
+        if position not in self.positional_frequencies:
+            return None
+        
+        letter_lower = letter.lower()
+        content = self.positional_frequencies[position]
+        lines = content.strip().split('\n')
+        
+        for line_num, line in enumerate(lines, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            # Parse format: "frequency letter" or just "letter"
+            parts = line.split()
+            if len(parts) >= 2:
+                file_letter = parts[-1].lower()
+            else:
+                file_letter = parts[0].lower()
+            
+            if file_letter == letter_lower:
+                return line_num
+        
+        return None
+    
+    def compute_word_scores(self):
+        """
+        Compute word score for each candidate word based on positional frequency line numbers
+        
+        Requirement 3.5: Compute word score - lower score is better
+        Score is sum of line numbers where letters appear in frequency files for unknown positions
+        
+        Returns:
+            List of (word, score) tuples sorted by score (lowest first)
+        """
+        if not self.candidate_words:
+            return []
+        
+        # Find unknown positions (positions not in green_constraints)
+        unknown_positions = [pos for pos in range(1, 6) if pos not in self.green_constraints]
+        
+        if not unknown_positions:
+            # All positions are known, return words with score 0
+            return [(word, 0) for word in sorted(self.candidate_words)]
+        
+        scored_words = []
+        
+        for word in self.candidate_words:
+            score = 0
+            for pos in unknown_positions:
+                letter = word[pos - 1].lower()  # Get letter at this position (0-indexed: pos-1)
+                line_num = self.get_letter_line_number(pos, letter)
+                if line_num is not None:
+                    score += line_num
+                else:
+                    # Letter not found in frequency file - assign high penalty score
+                    score += 1000
+            
+            scored_words.append((word, score))
+        
+        # Sort by score (lowest first), then alphabetically for ties
+        scored_words.sort(key=lambda x: (x[1], x[0]))
+        
+        return scored_words
+    
+    def get_words_with_most_vowels(self):
+        """
+        Get words with the most vowels from candidate words
+        
+        Requirement 3.4: Prioritize words that have the most vowels
+        
+        Returns:
+            Set of words with the highest vowel count
+        """
+        if not self.candidate_words:
+            return set()
+        
+        vowels = set('aeiou')
+        max_vowel_count = 0
+        vowel_words = set()
+        
+        for word in self.candidate_words:
+            vowel_count = sum(1 for char in word.lower() if char in vowels)
+            if vowel_count > max_vowel_count:
+                max_vowel_count = vowel_count
+                vowel_words = {word}
+            elif vowel_count == max_vowel_count:
+                vowel_words.add(word)
+        
+        return vowel_words
+    
+    def get_suggested_next_guess(self):
+        """
+        Get suggested next guess using vowel prioritization and positional frequency scoring
+        
+        Requirement 3.4: Prioritize words with most vowels
+        Requirement 3.5: Score words based on positional frequency line numbers
+        Requirement 3.5.1: Return all scored words for display
+        
+        Returns:
+            List of (word, score) tuples sorted by score (lowest first), or None if no candidates
+        """
+        if not self.candidate_words:
+            return None
+        
+        # Requirement 3.4: Get words with most vowels
+        vowel_words = self.get_words_with_most_vowels()
+        
+        if not vowel_words:
+            # Fallback to all candidates if no vowels found (shouldn't happen with valid words)
+            vowel_words = self.candidate_words
+        
+        # Requirement 3.5: Score the vowel-rich words
+        # Temporarily set candidate_words to vowel_words for scoring
+        original_candidates = self.candidate_words
+        self.candidate_words = vowel_words
+        scored_words = self.compute_word_scores()
+        self.candidate_words = original_candidates
+        
+        if scored_words:
+            # Requirement 3.5.1: Return all scored words
+            return scored_words
+        
+        # Fallback: create scored list from vowel words with score 0
+        return [(word, 0) for word in sorted(vowel_words)]
+    
     def get_default_first_guess(self):
         """
         Get default first guess suggestion
@@ -258,17 +393,31 @@ class WordleSolver:
                 line_words = sorted_repeated[i:i+words_per_line]
                 print("  " + " ".join(word.upper() for word in line_words))
     
-    def display_suggested_guess(self, guess):
+    def display_suggested_guess(self, scored_words):
         """
         Display suggested next guess after all constraints are applied
         
         Requirement 4.6: Display suggested next guess after all constraints are applied
+        Requirement 3.5.1: Display all scored words with their scores
         Requirement 5.3: Provide clear, human-readable prompts and feedback messages
         
         Args:
-            guess: The suggested guess word
+            scored_words: List of (word, score) tuples, or None/string for default first guess
         """
-        print(f"\nSuggested next guess: {guess}")
+        if scored_words is None:
+            # No candidates, show default first guess
+            print(f"\nSuggested next guess: {self.get_default_first_guess()}")
+        elif isinstance(scored_words, str):
+            # Backward compatibility: single word string
+            print(f"\nSuggested next guess: {scored_words}")
+        elif isinstance(scored_words, list) and len(scored_words) > 0:
+            # Requirement 3.5.1: Display all scored words with scores
+            print("\nSuggested next guess:")
+            for word, score in scored_words:
+                print(f"  {word.upper()} (score: {score})")
+        else:
+            # Empty list, fallback to default
+            print(f"\nSuggested next guess: {self.get_default_first_guess()}")
     
     def validate_guess(self, guess):
         """
@@ -445,8 +594,9 @@ class WordleSolver:
             self.display_candidates()
             
             # Requirement 4.6: Display suggested next guess
-            # TODO: Implement actual suggestion logic (requires requirement 3)
-            suggested = self.get_default_first_guess()  # Placeholder
+            # Requirement 3.4: Prioritize words with most vowels
+            # Requirement 3.5: Score words based on positional frequency
+            suggested = self.get_suggested_next_guess()
             self.display_suggested_guess(suggested)
             
             round_num += 1
