@@ -1,0 +1,13 @@
+# Requirements for Wordle Solver
+# Core dependencies
+# (No external dependencies required for basic CLI functionality)
+
+# Optional dependencies for MCP tool support
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+# MCP Python SDK (for direct Python integration)
+# Note: Install separately if using mcp/wordle_mcp.py
+# mcp>=0.1.0
+

@@ -16,7 +16,7 @@ See README.md for detailed setup and usage instructions.
 """
 import os
 import re
-from typing import Dict, Set, List, Tuple, Optional, Callable
+from typing import Dict, Set, List, Tuple, Optional, Callable, Any
 
 
 class WordleSolver:
@@ -631,9 +631,6 @@ class WordleSolver:
             if yellow_feedback is None:
                 return False
             
-            # Update yellow constraints
-            self.yellow_constraints = self.convert_yellow_letters(yellow_feedback)
-            
             # Requirement 4.4: Prompt for grey letters
             grey_input = self._prompt_with_validation(
                 self.prompt_for_grey_letters,
@@ -642,22 +639,93 @@ class WordleSolver:
             if grey_input is None:
                 return False
             
-            # Update grey constraints
-            self.grey_constraints.update(self.convert_grey_letters(grey_input))
-            
-            # Requirement 5.1: Filter candidate words using regex-based filtering
-            self.filter_candidates()
+            # Process feedback using the refactored method (maintains consistency)
+            # Convert grey input to list format for process_feedback
+            grey_list = grey_input.split() if grey_input else []
+            result = self.process_feedback(guess, green_feedback, yellow_feedback, grey_list)
             
             # Requirement 4.5: Display filtered candidates
             self.display_candidates()
             
             # Requirement 4.6: Display suggested next guess
-            # Requirement 3.4: Prioritize words with most vowels
-            # Requirement 3.5: Score words based on positional frequency
-            suggested = self.get_suggested_next_guess()
-            self.display_suggested_guess(suggested)
+            # Convert suggestions back to format expected by display_suggested_guess
+            if result["suggestions"]:
+                scored_words = [(s["word"].lower(), s["score"]) for s in result["suggestions"]]
+                self.display_suggested_guess(scored_words)
+            else:
+                self.display_suggested_guess(None)
             
             round_num += 1
+    
+    def process_feedback(
+        self,
+        guess: str,
+        greens: str,
+        yellows: str,
+        greys: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Process Wordle feedback and return candidates and suggestions
+        
+        Requirement 6.2: Refactor solver logic into a clean, callable function
+        Requirement 6.2.1: Function named process_feedback
+        Requirement 6.2.2: Takes guess, greens, yellows, greys parameters
+        Requirement 6.2.3: Returns dictionary with candidates and suggestions
+        
+        This method processes feedback without user interaction, making it suitable
+        for programmatic use (e.g., MCP tools) while maintaining the same core logic
+        as the interactive solve() method.
+        
+        Args:
+            guess: The guessed word (e.g., "saint")
+            greens: Green letters feedback string with dots for unknown positions (e.g., "..i..")
+            yellows: Yellow letters feedback string with dots (e.g., "s....")
+            greys: List of excluded letters (e.g., ["a", "n", "t"])
+        
+        Returns:
+            Dictionary containing:
+                - candidates: List of candidate words (strings)
+                - suggestions: List of dictionaries with "word" and "score" keys
+                  Example: [{"word": "GUISE", "score": 19}, {"word": "POISE", "score": 20}]
+        """
+        # Convert inputs to proper format
+        guess_upper = guess.upper()
+        greens_upper = greens.upper()
+        yellows_upper = yellows.upper()
+        greys_upper = [g.upper() for g in greys]
+        
+        # Update constraints based on feedback
+        # Requirement 2.3: Convert green letters to position mapping
+        self.green_constraints = self.convert_green_letters(greens_upper)
+        
+        # Requirement 2.5: Convert yellow letters to excluded positions mapping
+        self.yellow_constraints = self.convert_yellow_letters(yellows_upper)
+        
+        # Requirement 2.7: Convert grey letters to excluded set
+        # Note: This replaces existing grey constraints (for MCP use case)
+        # For CLI, we use update() to accumulate across rounds
+        self.grey_constraints = set(greys_upper)
+        
+        # Requirement 5.1: Filter candidate words using regex-based filtering
+        self.filter_candidates()
+        
+        # Get candidate words as sorted list
+        candidates = sorted(self.candidate_words)
+        
+        # Requirement 3.4 & 3.5: Get suggested guesses with scores
+        scored_words = self.get_suggested_next_guess()
+        
+        # Format suggestions as list of dicts
+        suggestions = []
+        if scored_words:
+            for word, score in scored_words:
+                suggestions.append({"word": word.upper(), "score": score})
+        
+        # Requirement 6.2.3: Return dictionary with candidates and suggestions
+        return {
+            "candidates": candidates,
+            "suggestions": suggestions
+        }
     
     def filter_candidates(self) -> None:
         """
