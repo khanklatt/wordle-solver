@@ -1,15 +1,24 @@
 services:
   wordle-solver:
-    build: .
+    image: gitea.services.khan.org/khan/wordle-solver:latest
+    container_name: wordle-solver
+    restart: unless-stopped
+    # If using NPM on the same host, you can technically omit 'ports' 
+    # and just use the network, but keeping it is fine for testing.
     ports:
       - "5001:5000"
-    volumes:
-      - ./lib:/app/lib:ro
-      - ./web:/app/web:ro
-      # Mount Python code for development (allows hot-reload without rebuild)
-      - ./api:/app/api:ro
-      - ./wordle_solver.py:/app/wordle_solver.py:ro
+    networks:
+      - proxy-net
     environment:
-      - FLASK_ENV=development
-    restart: unless-stopped
+      - FLASK_ENV=production
+    # Metadata for getHomepage (Homepage)
+    labels:
+      - "homepage.group=Games"
+      - "homepage.name=Wordle Solver"
+      - "homepage.icon=wordle" # Or a custom svg
+      - "homepage.href=https://wordle.services.khan.org"
+      - "homepage.description=Khan's Wordle Logic Engine"
 
+networks:
+  proxy-net:
+    external: true

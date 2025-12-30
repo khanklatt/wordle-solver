@@ -44,8 +44,11 @@ jobs:
       
       - name: Deploy with Compose
         run: |
-          mkdir -p $DOCKER_PATH/$CONTAINER_NAME
-          cp -r . $DOCKER_PATH/$CONTAINER_NAME/
-          cd $DOCKER_PATH/$CONTAINER_NAME
-          docker compose down --rmi local
+          mkdir -p ${{ env.DOCKER_PATH }}/${{ env.CONTAINER_NAME }}
+          # Copy everything (including the docker-compose.yaml) to the NAS folder
+          cp -r . ${{ env.DOCKER_PATH }}/${{ env.CONTAINER_NAME }}/
+          
+          cd ${{ env.DOCKER_PATH }}/${{ env.CONTAINER_NAME }}
+          
+          # Use the image we just built instead of re-building
           docker compose up -d --force-recreate
