@@ -1,0 +1,51 @@
+name: CI-CD-Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: fumes
+
+    env:
+      # Base paths and configuration
+      DOCKER_PATH: /volume2/docker/compose
+      GITEA_SERVER: gitea.services.khan.org
+      PROJECT: khan
+      TAG_NAME: latest
+      CONTAINER_NAME: wordle-solver
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Run Tests
+        run: |
+          echo "Running test suite..."
+          # Install dependencies for testing
+          pip3 install -r api/requirements.txt || true
+          # Run CLI tests (always available)
+          python3 -m unittest test_wordle_solver -v || exit 1
+          # Run API tests if Flask is available
+          if python3 -c "import flask" 2>/dev/null; then
+            python3 -m unittest api.test_api -v || exit 1
+          else
+            echo "Warning: Flask not installed, skipping API tests"
+          fi
+          echo "All tests passed!"
+      
+      - name: Build Docker Image
+        run: |
+          echo "Container: $CONTAINER_NAME"
+          echo "Deploy path: $DOCKER_PATH/$CONTAINER_NAME"
+          echo "Image: $GITEA_SERVER/$PROJECT/$CONTAINER_NAME:$TAG_NAME"
+          docker build -t $GITEA_SERVER/$PROJECT/$CONTAINER_NAME:$TAG_NAME .
+      
+      - name: Deploy with Compose
+        run: |
+          mkdir -p $DOCKER_PATH/$CONTAINER_NAME
+          cp -r . $DOCKER_PATH/$CONTAINER_NAME/
+          cd $DOCKER_PATH/$CONTAINER_NAME
+          docker compose down --rmi local
+          docker compose up -d --force-recreate

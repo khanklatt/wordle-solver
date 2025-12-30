@@ -231,8 +231,70 @@ wordle-solver/
 Run the test suite to verify everything works:
 
 ```bash
+# Run CLI solver tests
 python3 -m unittest test_wordle_solver -v
+
+# Run API tests (requires Flask: pip install -r api/requirements.txt)
+python3 -m unittest api.test_api -v
+
+# Run all tests
+./run_tests.sh
 ```
+
+The test suite includes:
+- **CLI Tests**: 26 tests covering core solver functionality
+- **API Tests**: 10 tests covering stateless API endpoints and constraint handling
+- Tests verify stateless API design and client-side constraint accumulation
+
+## Web UI
+
+The Wordle Solver is now available as a web application with a modern, NYT-style interface.
+
+### Running the Web UI
+
+#### Using Docker (Recommended)
+
+```bash
+# Build and run with Docker Compose
+docker-compose up -d
+
+# Access at http://localhost:5000
+```
+
+#### Manual Setup
+
+```bash
+# Install dependencies
+cd api
+pip install -r requirements.txt
+
+# Run Flask server
+python app.py
+
+# Access at http://localhost:5000
+```
+
+### Web UI Features
+
+- **Interactive Game Board**: 5x6 grid matching NYT Wordle interface
+- **Color Cycling Feedback**: Click squares to cycle through feedback states (blue → yellow → green → grey)
+- **Word Suggestions**: Sidebar displays ranked suggestions with scores
+- **Click to Fill**: Click any suggestion to auto-fill the guess input
+- **Mobile Responsive**: Works on mobile devices (320px+ width)
+- **Keyboard Navigation**: Full keyboard support for accessibility
+
+### Usage
+
+1. Type a 5-letter word in the input field
+2. Press Enter or click "Enter" to submit
+3. Click each blue square to cycle through feedback:
+   - **Blue** → **Yellow** (letter in word, wrong position)
+   - **Yellow** → **Green** (letter in correct position)
+   - **Green** → **Grey** (letter not in word)
+   - **Grey** → **Yellow** (cycles back)
+4. After all squares are processed, suggestions appear automatically
+5. Click any suggestion to use it as your next guess
+6. Click "New Game" to start over
 
 ## Methodology
 

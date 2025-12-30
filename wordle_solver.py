@@ -349,35 +349,28 @@ class WordleSolver:
         user_input = input("Enter grey letters (space-separated, e.g., 'E R T'): ").strip()
         return user_input.upper()
     
-    def validate_grey_letters(self, grey_string: str) -> Tuple[bool, str]:
+    def normalize_grey_letters(self, grey_string: str) -> str:
         """
-        Validate grey letters input format
+        Normalize grey letters input - extract valid single letters, ignore invalid entries
         
-        Requirement 5.4: Handle invalid input gracefully with appropriate error messages
+        Stateless design: accepts any input and normalizes it rather than rejecting.
         
         Args:
-            grey_string: Grey letters input string (space-separated)
+            grey_string: Grey letters input string (space-separated or any format)
         
         Returns:
-            Tuple of (is_valid, error_message)
+            Normalized grey string (space-separated valid single letters, uppercase)
         """
         if not grey_string:
-            return True, ""  # Empty is valid (no grey letters)
-        
-        # Check that all characters are letters or spaces
-        for char in grey_string:
-            if not (char.isalpha() or char.isspace()):
-                return False, "Error: Grey letters must contain only letters and spaces."
-        
-        # Check that letters are single characters (not words)
-        letters = grey_string.split()
-        for letter in letters:
-            if len(letter) != 1:
-                return False, f"Error: Each grey letter must be a single character (got '{letter}')."
-            if not letter.isalpha():
-                return False, f"Error: Grey letters must be alphabetic (got '{letter}')."
-        
-        return True, ""
+            return ""
+        # Extract all single alphabetic characters (ignore multi-char, numbers, etc.)
+        letters = []
+        for item in str(grey_string).split():
+            item = item.strip().upper()
+            # Only include single alphabetic characters
+            if len(item) == 1 and item.isalpha():
+                letters.append(item)
+        return ' '.join(letters)
     
     def convert_grey_letters(self, grey_string: str) -> Set[str]:
         """
@@ -395,40 +388,12 @@ class WordleSolver:
             return set()
         return {letter.upper() for letter in grey_string.split() if letter.strip()}
     
-    def split_candidates_by_letter_uniqueness(self) -> Tuple[Set[str], Set[str]]:
-        """
-        Split candidate words into unique letters and repeated letters sections
-        
-        DEPRECATED: Requirement 3.2 has been deprecated. This method is kept for backward compatibility
-        but is no longer used in the display logic.
-        
-        Returns:
-            Tuple of (unique_letters_words, repeated_letters_words) sets
-        """
-        unique_words = set()
-        repeated_words = set()
-        
-        for word in self.candidate_words:
-            # Check if word has all unique letters
-            letter_set = set(word.lower())
-            if len(letter_set) == len(word):
-                # All letters are unique
-                unique_words.add(word)
-            else:
-                # Has repeated letters
-                repeated_words.add(word)
-        
-        return unique_words, repeated_words
-    
     def display_candidates(self) -> None:
         """
         Display filtered candidate words after each constraint application
         
         Requirement 4.5: Display filtered candidate words after each constraint application
         Requirement 5.3: Provide clear, human-readable prompts and feedback messages
-        
-        Note: Requirement 3.2 (two-section display) has been deprecated. Candidates are now
-        displayed as a sorted list, with scoring used to prioritize viable solutions.
         """
         if not self.candidate_words:
             print("No candidate words found.")
@@ -436,7 +401,7 @@ class WordleSolver:
         
         print(f"\nFound {len(self.candidate_words)} candidate word(s):")
         
-        # Display candidates as sorted list (no longer split into sections per deprecated 3.2)
+        # Display candidates as sorted list
         sorted_candidates = sorted(self.candidate_words)
         for i in range(0, len(sorted_candidates), self.WORDS_PER_LINE):
             line_words = sorted_candidates[i:i+self.WORDS_PER_LINE]
@@ -468,98 +433,104 @@ class WordleSolver:
             # Empty list, fallback to default
             print(f"\nSuggested next guess: {self.get_default_first_guess()}")
     
-    def validate_guess(self, guess: str) -> Tuple[bool, str]:
+    def normalize_guess(self, guess: str) -> str:
         """
-        Validate guess input
+        Normalize guess input - extract alphabetic characters and pad/truncate to WORD_LENGTH
         
-        Requirement 5.4: Handle invalid input gracefully with appropriate error messages
+        Stateless design: accepts any input and normalizes it rather than rejecting.
         
         Args:
-            guess: Guess word to validate
+            guess: Guess word to normalize
             
         Returns:
-            Tuple of (is_valid, error_message)
+            Normalized guess string (uppercase, WORD_LENGTH characters)
         """
         if not guess:
-            return False, "Error: Guess cannot be empty."
-        if len(guess) != self.WORD_LENGTH:
-            return False, f"Error: Guess must be exactly {self.WORD_LENGTH} letters (got {len(guess)})."
-        if not guess.isalpha():
-            return False, "Error: Guess must contain only letters."
-        return True, ""
+            return 'X' * self.WORD_LENGTH  # Pad with X if empty
+        # Extract only alphabetic characters
+        guess = ''.join(c for c in str(guess).strip().upper() if c.isalpha())
+        # Pad or truncate to WORD_LENGTH
+        if len(guess) < self.WORD_LENGTH:
+            return guess + 'X' * (self.WORD_LENGTH - len(guess))
+        elif len(guess) > self.WORD_LENGTH:
+            return guess[:self.WORD_LENGTH]
+        return guess
     
-    def validate_green_letters(self, green_string: str) -> Tuple[bool, str]:
+    def normalize_green_letters(self, green_string: str) -> str:
         """
-        Validate green letters input format
+        Normalize green letters input - pad/truncate to WORD_LENGTH, filter invalid chars
         
-        Requirement 5.4: Handle invalid input gracefully with appropriate error messages
+        Stateless design: accepts any input and normalizes it rather than rejecting.
         
         Args:
             green_string: Green letters feedback string
             
         Returns:
-            Tuple of (is_valid, error_message)
+            Normalized green string (uppercase, WORD_LENGTH characters, letters and dots only)
         """
         if not green_string:
-            return False, "Error: Green letters feedback cannot be empty."
-        if len(green_string) != self.WORD_LENGTH:
-            return False, f"Error: Green letters must be exactly {self.WORD_LENGTH} characters (got {len(green_string)})."
-        if not all(c.isalpha() or c == '.' for c in green_string):
-            return False, "Error: Green letters must contain only letters and dots."
-        return True, ""
+            return '.' * self.WORD_LENGTH
+        # Filter to letters and dots only, uppercase
+        normalized = ''.join(c.upper() if c.isalpha() else '.' if c == '.' else '.' 
+                            for c in str(green_string).strip())
+        # Pad or truncate to WORD_LENGTH
+        if len(normalized) < self.WORD_LENGTH:
+            return normalized + '.' * (self.WORD_LENGTH - len(normalized))
+        elif len(normalized) > self.WORD_LENGTH:
+            return normalized[:self.WORD_LENGTH]
+        return normalized
     
-    def validate_yellow_letters(self, yellow_string: str) -> Tuple[bool, str]:
+    def normalize_yellow_letters(self, yellow_string: str) -> str:
         """
-        Validate yellow letters input format
+        Normalize yellow letters input - pad/truncate to WORD_LENGTH, filter invalid chars
         
-        Requirement 5.4: Handle invalid input gracefully with appropriate error messages
+        Stateless design: accepts any input and normalizes it rather than rejecting.
         
         Args:
             yellow_string: Yellow letters feedback string
             
         Returns:
-            Tuple of (is_valid, error_message)
+            Normalized yellow string (uppercase, WORD_LENGTH characters, letters and dots only)
         """
         if not yellow_string:
-            return True, ""  # Empty is valid (no yellow letters)
-        if len(yellow_string) != self.WORD_LENGTH:
-            return False, f"Error: Yellow letters must be exactly {self.WORD_LENGTH} characters (got {len(yellow_string)})."
-        if not all(c.isalpha() or c == '.' for c in yellow_string):
-            return False, "Error: Yellow letters must contain only letters and dots."
-        return True, ""
+            return '.' * self.WORD_LENGTH
+        # Filter to letters and dots only, uppercase
+        normalized = ''.join(c.upper() if c.isalpha() else '.' if c == '.' else '.' 
+                            for c in str(yellow_string).strip())
+        # Pad or truncate to WORD_LENGTH
+        if len(normalized) < self.WORD_LENGTH:
+            return normalized + '.' * (self.WORD_LENGTH - len(normalized))
+        elif len(normalized) > self.WORD_LENGTH:
+            return normalized[:self.WORD_LENGTH]
+        return normalized
     
-    def _prompt_with_validation(
+    def _prompt_with_normalization(
         self,
         prompt_func: Callable[[], str],
-        validate_func: Callable[[str], Tuple[bool, str]],
-        convert_func: Optional[Callable[[str], str]] = None
+        normalize_func: Callable[[str], str]
     ) -> Optional[str]:
         """
-        Generic prompt loop with validation and quit handling
+        Generic prompt loop with normalization and quit handling
+        
+        Stateless design: normalizes input rather than rejecting invalid formats.
         
         Args:
             prompt_func: Function that prompts user and returns input string
-            validate_func: Function that validates input and returns (is_valid, error_msg)
-            convert_func: Optional function to convert input (default: uppercase)
+            normalize_func: Function that normalizes input to valid format
         
         Returns:
-            Validated and converted input string, or None if user quits
+            Normalized input string, or None if user quits
         """
         while True:
             try:
                 user_input = prompt_func()
-                if user_input.upper() == 'QUIT':
+                if user_input.upper().strip() == 'QUIT':
                     print("Exiting Wordle Solver. Goodbye!")
                     return None
                 
-                is_valid, error_msg = validate_func(user_input)
-                if is_valid:
-                    if convert_func:
-                        return convert_func(user_input)
-                    return user_input.upper()
-                else:
-                    print(error_msg)
-                    print("Please try again.")
+                # Normalize input (never reject, always normalize)
+                normalized = normalize_func(user_input)
+                return normalized
             except KeyboardInterrupt:
                 print("\n\nExiting Wordle Solver. Goodbye!")
                 return None
@@ -587,18 +558,18 @@ class WordleSolver:
         while True:
             print(f"\n--- Round {round_num} ---")
             
-            # Requirement 4.1: Prompt for guess
-            guess = self._prompt_with_validation(
+            # Requirement 4.1: Prompt for guess (normalize, don't validate)
+            guess = self._prompt_with_normalization(
                 self.prompt_for_guess,
-                self.validate_guess
+                self.normalize_guess
             )
             if guess is None:
                 return False
             
-            # Requirement 4.2: Prompt for green letters
-            green_feedback = self._prompt_with_validation(
+            # Requirement 4.2: Prompt for green letters (normalize, don't validate)
+            green_feedback = self._prompt_with_normalization(
                 self.prompt_for_green_letters,
-                self.validate_green_letters
+                self.normalize_green_letters
             )
             if green_feedback is None:
                 return False
@@ -606,7 +577,7 @@ class WordleSolver:
             # Check if puzzle is solved (all positions are green)
             # Note: We check after process_feedback which merges constraints
             # But we need to check the new green feedback specifically
-            new_green_constraints = self.convert_green_letters(green_feedback.upper())
+            new_green_constraints = self.convert_green_letters(green_feedback)
             if len(new_green_constraints) == self.WORD_LENGTH:
                 # Update constraints and check
                 self.green_constraints.update(new_green_constraints)
@@ -614,24 +585,25 @@ class WordleSolver:
                     print("\n🎉 Congratulations! Puzzle solved!")
                     return True
             
-            # Requirement 4.3: Prompt for yellow letters
-            yellow_feedback = self._prompt_with_validation(
+            # Requirement 4.3: Prompt for yellow letters (normalize, don't validate)
+            yellow_feedback = self._prompt_with_normalization(
                 self.prompt_for_yellow_letters,
-                self.validate_yellow_letters
+                self.normalize_yellow_letters
             )
             if yellow_feedback is None:
                 return False
             
-            # Requirement 4.4: Prompt for grey letters
-            grey_input = self._prompt_with_validation(
+            # Requirement 4.4: Prompt for grey letters (normalize, don't validate)
+            grey_input = self._prompt_with_normalization(
                 self.prompt_for_grey_letters,
-                self.validate_grey_letters
+                self.normalize_grey_letters
             )
             if grey_input is None:
                 return False
             
             # Process feedback using the refactored method (maintains consistency)
             # Convert grey input to list format for process_feedback
+            # Note: grey_input is already normalized (space-separated valid letters)
             grey_list = grey_input.split() if grey_input else []
             result = self.process_feedback(guess, green_feedback, yellow_feedback, grey_list)
             
@@ -647,6 +619,53 @@ class WordleSolver:
                 self.display_suggested_guess(None)
             
             round_num += 1
+    
+    def apply_constraints(
+        self,
+        green_constraints: Dict[int, str],
+        yellow_constraints: Dict[str, Set[int]],
+        grey_constraints: Set[str]
+    ) -> Dict[str, Any]:
+        """
+        Apply constraints directly and return candidates and suggestions (stateless API)
+        
+        Stateless version: accepts all constraints at once rather than accumulating.
+        This method is used by the web API to process constraints without requiring a guess.
+        
+        Args:
+            green_constraints: Dict mapping position (1-indexed) to letter
+            yellow_constraints: Dict mapping letter to set of excluded positions (1-indexed)
+            grey_constraints: Set of excluded letters
+        
+        Returns:
+            Dictionary containing:
+                - candidates: List of candidate words (strings)
+                - suggestions: List of dictionaries with "word" and "score" keys
+        """
+        # Reset and apply constraints directly
+        self.green_constraints = green_constraints.copy()
+        self.yellow_constraints = {k: v.copy() for k, v in yellow_constraints.items()}
+        self.grey_constraints = grey_constraints.copy()
+        
+        # Filter candidates
+        self.filter_candidates()
+        
+        # Get candidate words as sorted list
+        candidates = sorted(self.candidate_words)
+        
+        # Get suggested guesses with scores
+        scored_words = self.get_suggested_next_guess()
+        
+        # Format suggestions as list of dicts
+        suggestions = []
+        if scored_words:
+            for word, score in scored_words:
+                suggestions.append({"word": word.upper(), "score": score})
+        
+        return {
+            "candidates": candidates,
+            "suggestions": suggestions
+        }
     
     def process_feedback(
         self,
@@ -677,38 +696,54 @@ class WordleSolver:
         Raises:
             ValueError: If input parameters are invalid
         """
-        # Validate inputs
-        if not guess or not isinstance(guess, str):
-            raise ValueError(f"Guess must be a non-empty string")
-        if len(guess) != self.WORD_LENGTH:
-            raise ValueError(f"Guess must be exactly {self.WORD_LENGTH} letters (got {len(guess)})")
-        if not guess.isalpha():
-            raise ValueError("Guess must contain only letters")
+        # Normalize inputs - be flexible about format
+        # Convert guess to string and normalize - truncate or pad to WORD_LENGTH
+        if not guess:
+            guess = ""
+        guess = str(guess).strip().upper()
+        # Only keep alphabetic characters
+        guess = ''.join(c for c in guess if c.isalpha())
+        # Truncate or pad to WORD_LENGTH
+        if len(guess) < self.WORD_LENGTH:
+            guess = guess + 'X' * (self.WORD_LENGTH - len(guess))  # Pad with X (will be filtered out)
+        elif len(guess) > self.WORD_LENGTH:
+            guess = guess[:self.WORD_LENGTH]
         
-        if not greens or not isinstance(greens, str):
-            raise ValueError(f"Greens must be a non-empty string")
-        if len(greens) != self.WORD_LENGTH:
-            raise ValueError(f"Greens must be exactly {self.WORD_LENGTH} characters (got {len(greens)})")
-        if not all(c.isalpha() or c == '.' for c in greens):
-            raise ValueError("Greens must contain only letters and dots")
+        # Normalize greens - pad with dots if shorter, truncate if longer
+        if not greens:
+            greens = ""
+        greens = str(greens).strip().upper()
+        if len(greens) < self.WORD_LENGTH:
+            greens = greens + '.' * (self.WORD_LENGTH - len(greens))
+        elif len(greens) > self.WORD_LENGTH:
+            greens = greens[:self.WORD_LENGTH]
         
-        if not yellows or not isinstance(yellows, str):
-            raise ValueError(f"Yellows must be a non-empty string")
-        if len(yellows) != self.WORD_LENGTH:
-            raise ValueError(f"Yellows must be exactly {self.WORD_LENGTH} characters (got {len(yellows)})")
-        if not all(c.isalpha() or c == '.' for c in yellows):
-            raise ValueError("Yellows must contain only letters and dots")
+        # Normalize yellows - pad with dots if shorter, truncate if longer
+        if not yellows:
+            yellows = ""
+        yellows = str(yellows).strip().upper()
+        if len(yellows) < self.WORD_LENGTH:
+            yellows = yellows + '.' * (self.WORD_LENGTH - len(yellows))
+        elif len(yellows) > self.WORD_LENGTH:
+            yellows = yellows[:self.WORD_LENGTH]
         
+        # Normalize greys - filter to valid letters only
         if not isinstance(greys, list):
-            raise ValueError("Greys must be a list")
+            greys = []
+        greys_upper = []
         for grey in greys:
-            if not isinstance(grey, str) or len(grey) != 1 or not grey.isalpha():
-                raise ValueError(f"Each grey letter must be a single alphabetic character (got '{grey}')")
+            if isinstance(grey, str) and len(grey) == 1 and grey.isalpha():
+                greys_upper.append(grey.upper())
+            elif isinstance(grey, str) and grey.strip():
+                # Try to extract single letter from string
+                cleaned = grey.strip().upper()
+                if len(cleaned) == 1 and cleaned.isalpha():
+                    greys_upper.append(cleaned)
         
-        guess_upper = guess.upper()
-        greens_upper = greens.upper()
-        yellows_upper = yellows.upper()
-        greys_upper = [g.upper() for g in greys]
+        # Use normalized values (already upper case)
+        guess_upper = guess
+        greens_upper = greens
+        yellows_upper = yellows
         
         # Update constraints based on feedback - MERGE with existing constraints
         new_green_constraints = self.convert_green_letters(greens_upper)

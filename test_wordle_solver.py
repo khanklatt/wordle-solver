@@ -343,11 +343,10 @@ class TestCLIInterface(unittest.TestCase):
         Test Case 4.5.1: System displays filtered candidate words after each constraint application
         
         Requirement 4.5: Display filtered candidate words after each constraint application
-        Requirement 3.2: Display candidates split into unique letters and repeated letters sections
         
         Given: Candidate words have been filtered
         When: display_candidates is called
-        Then: Candidate words are displayed in two sections (unique letters and repeated letters)
+        Then: Candidate words are displayed as a sorted list
         """
         solver = WordleSolver()
         solver.candidate_words = {'saint', 'slant', 'plant', 'briss', 'hello'}
@@ -363,14 +362,9 @@ class TestCLIInterface(unittest.TestCase):
         output = f.getvalue()
         self.assertIn('saint', output.lower())
         self.assertIn('candidate', output.lower())
-        # Verify two sections are displayed
-        self.assertIn('section 1', output.lower())
-        self.assertIn('section 2', output.lower())
-        self.assertIn('unique letters', output.lower())
-        self.assertIn('repeated letters', output.lower())
-        # Verify words are in correct sections
-        self.assertIn('briss', output.lower())  # Should be in section 2
-        self.assertIn('hello', output.lower())  # Should be in section 2
+        # Verify all words are displayed
+        self.assertIn('briss', output.lower())
+        self.assertIn('hello', output.lower())
     
     def test_display_suggested_next_guess(self):
         """
@@ -430,18 +424,21 @@ class TestCLIInterface(unittest.TestCase):
         """
         solver = WordleSolver()
         
-        # Test invalid guess length
-        result = solver.validate_guess('ABCD')  # Too short
-        self.assertFalse(result[0])  # Validation failed
-        self.assertIn('error', result[1].lower() or '')
+        # Test normalization handles invalid input gracefully (stateless design)
+        # Too short guess - should be normalized (padded)
+        normalized = solver.normalize_guess('ABCD')  # Too short
+        self.assertEqual(len(normalized), 5)  # Should be padded to 5 chars
+        self.assertTrue(normalized.startswith('ABCD'))
         
-        # Test invalid green letters format
-        result = solver.validate_green_letters('S..N')  # Wrong length
-        self.assertFalse(result[0])
+        # Test invalid green letters format - should be normalized (padded)
+        normalized = solver.normalize_green_letters('S..N')  # Wrong length
+        self.assertEqual(len(normalized), 5)  # Should be padded to 5 chars
+        self.assertTrue(normalized.startswith('S..N'))
         
-        # Test invalid yellow letters format  
-        result = solver.validate_yellow_letters('A..')  # Wrong length
-        self.assertFalse(result[0])
+        # Test invalid yellow letters format - should be normalized (padded)
+        normalized = solver.normalize_yellow_letters('A..')  # Wrong length
+        self.assertEqual(len(normalized), 5)  # Should be padded to 5 chars
+        self.assertTrue(normalized.startswith('A..'))
 
 
 class TestGuessWordFilterGeneration(unittest.TestCase):
@@ -586,36 +583,6 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
         self.assertIn('slain', self.solver.candidate_words)
         self.assertIn('snail', self.solver.candidate_words)
     
-    def test_split_candidates_into_unique_and_repeated_letters(self):
-        """
-        Test Case 3.2.1: System splits candidate words into unique letters and repeated letters sections
-        
-        DEPRECATED: Requirement 3.2 has been deprecated. This test is kept for backward compatibility
-        but the functionality is no longer used in the display logic.
-        
-        Given: Candidate words include both unique-letter words and words with repeated letters
-        When: split_candidates_by_letter_uniqueness is called
-        Then: Returns two sets - unique_letters_words and repeated_letters_words
-        """
-        solver = WordleSolver()
-        solver.candidate_words = {'brisk', 'briss', 'saint', 'slant', 'hello', 'plant'}
-        
-        unique_words, repeated_words = solver.split_candidates_by_letter_uniqueness()
-        
-        # Words with unique letters: brisk, saint, slant, plant
-        expected_unique = {'brisk', 'saint', 'slant', 'plant'}
-        # Words with repeated letters: briss (double S), hello (double L)
-        expected_repeated = {'briss', 'hello'}
-        
-        self.assertEqual(unique_words, expected_unique)
-        self.assertEqual(repeated_words, expected_repeated)
-        
-        # Verify all words are accounted for
-        self.assertEqual(len(unique_words) + len(repeated_words), len(solver.candidate_words))
-        
-        # Verify no overlap
-        self.assertEqual(unique_words & repeated_words, set())
-    
     def test_compute_word_score_based_on_positional_frequency(self):
         """
         Test Case 3.5.1: System computes word score based on positional frequency line numbers
@@ -697,7 +664,7 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
         """
         Test Case 3.4-3.5 Integration: System suggests next guess using scoring for all words
         
-        Requirement 3.5: Compute word score for all suggested words (not just ones with most vowels)
+        Requirement 3.5: Compute word score for all suggested words
         Words are grouped by score, with lowest scores shown first
         
         Given: Candidate words with varying vowels and scores
@@ -724,14 +691,14 @@ class TestGuessWordFilterGeneration(unittest.TestCase):
             solver.candidate_words = candidate_words
             solver.green_constraints = {}  # All positions unknown
             
-            # Get suggested guess (now returns list of scored words for ALL candidates)
+            # Get suggested guess (returns list of scored words for ALL candidates)
             scored_words = solver.get_suggested_next_guess()
             
             # Should return list of scored words
             self.assertIsInstance(scored_words, list)
             self.assertGreater(len(scored_words), 0)
             
-            # Requirement 3.5: Should contain ALL candidate words (not just vowel-rich ones)
+            # Requirement 3.5: Should contain ALL candidate words
             scored_word_set = {word.lower() for word, score in scored_words}
             self.assertEqual(scored_word_set, {w.lower() for w in candidate_words},
                           f"Scored words should include ALL candidate words. Got: {scored_word_set}, Expected: {candidate_words}")

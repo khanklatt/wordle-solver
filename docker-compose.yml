@@ -1,0 +1,15 @@
+services:
+  wordle-solver:
+    build: .
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./lib:/app/lib:ro
+      - ./web:/app/web:ro
+      # Mount Python code for development (allows hot-reload without rebuild)
+      - ./api:/app/api:ro
+      - ./wordle_solver.py:/app/wordle_solver.py:ro
+    environment:
+      - FLASK_ENV=development
+    restart: unless-stopped
+
